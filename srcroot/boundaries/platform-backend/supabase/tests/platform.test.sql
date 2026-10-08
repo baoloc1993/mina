@@ -105,7 +105,7 @@ select throws_ok($$update public.app_versions set sha256 = repeat('b', 64) where
 create function pg_temp.cat(p_tenant uuid) returns text language sql as $$
   select coalesce(string_agg(id || '@' || coalesce(version, 'null') || ':' || coalesce(status, '-') || case when installed then ':cài' else '' end,
                              ', ' order by id), '(rỗng)')
-    from public.catalog_for(p_tenant) where id <> 'vn.app.hello'
+    from public.catalog_for(p_tenant) where id not in ('vn.app.hello', 'vn.app.hello-cal', 'vn.app.private-a')
 $$;
 select is(pg_temp.cat((select ta from ids)), '(rỗng)', 'chưa có bản published / chưa được thử: catalog rỗng');
 insert into public.app_version_testers (app_id, version, tenant_id) values ('vn.app.pub1', '1.0.0', (select ta from ids));
@@ -208,6 +208,13 @@ insert into public.core_tags (id, tenant_id, name) values (gen_random_uuid(), (s
 insert into public.core_contacts (id, tenant_id, name) values (gen_random_uuid(), (select ta from ids), 'Bố');
 insert into public.core_files (id, tenant_id, app_id, name, storage_path)
   values (gen_random_uuid(), (select ta from ids), 'vn.app.hello', 'anh.jpg', (select ta from ids) || '/f1');
+
+-- App mẫu đã seed (hello-cal có cột title bắt buộc): chèn sẵn một dòng của A nếu bảng có mặt.
+do $$ begin
+  if to_regclass('public.app_vn_app_hello_cal_reminders') is not null then
+    insert into public.app_vn_app_hello_cal_reminders (id, tenant_id, title) values ('r-rls-a', (select ta from ids), 'nhắc thử');
+  end if;
+end $$;
 
 create temp table tt as
   select c.table_name::text as t

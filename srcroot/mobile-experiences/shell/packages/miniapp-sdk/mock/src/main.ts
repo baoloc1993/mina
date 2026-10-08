@@ -37,6 +37,8 @@ interface LogRow {
   scope: string;
   state: 'wait' | 'ok' | 'bad';
   text: string;
+  key?: string;
+  count?: number;
   sub?: string;
 }
 const rows: LogRow[] = [];
@@ -56,7 +58,7 @@ function renderLog() {
     ? rows
         .map(
           (r) =>
-            `<div><span class="wait">${r.time}</span><span>${esc(r.method)}${r.sub ? `<span class="sub">${esc(r.sub)}</span>` : ''}</span><span class="wait">${esc(r.scope)}</span><span class="${r.state}">${esc(r.text)}</span></div>`,
+            `<div><span class="wait">${r.time}</span><span>${esc(r.method)}${r.sub ? `<span class="sub">${esc(r.sub)}</span>` : ''}</span><span class="wait">${esc(r.scope)}</span><span class="${r.state}">${esc(r.text)}${r.count && r.count > 1 ? ` ×${r.count}` : ''}</span></div>`,
         )
         .join('')
     : '<div class="empty"><span>Chưa có lời gọi nào — bấm nút trong app mẫu</span></div>';
@@ -151,7 +153,8 @@ async function main() {
   $('manifest-info').textContent = `${manifest.id} ${manifest.version} · tiền tố bảng ${tablePrefix}_ · tables: ${manifest.tables.join(', ')} · network: ${(manifest.network ?? []).join(', ') || '—'}`;
 
   // ----- DB -----
-  const db = await openWasmDb(name);
+  // Một DB dùng chung cho mọi fixture/tab (như SQLite của shell: core_* thấy chung); ảnh chụp lưu IndexedDB.
+  const db = await openWasmDb('shared');
   const prep = prepareDatabase(db, manifest, tablePrefix, fx.migrations);
   db.persist();
   addRow({
@@ -174,6 +177,8 @@ async function main() {
   let iframeLoaded = false;
 
   const bus = createTabBus(() => manifest);
+  db.onSaved = () => bus.notifyDb();
+  bus.onDb(() => void db.reload());
   bus.announce(manifest);
   const mock = createMockHost({
     manifest: () => manifest,
@@ -246,6 +251,19 @@ async function main() {
       row.state = 'ok';
       row.text = 'OK';
       row.sub = `${short(req?.params, 50)} → ${short(resp.result, 60)}`;
+    }
+    // Lời gọi lặp y hệt đã OK (app thăm dò định kỳ) gộp vào một dòng ×N để log không bị ngập.
+    if (!resp.error) {
+      const key = `${req.method}|${JSON.stringify(req.params)}|${JSON.stringify(resp.result)}`;
+      const prev = rows.findIndex((x, i) => x !== row && i < 40 && x.state === 'ok' && x.key === key);
+      if (prev >= 0) {
+        const keep = rows[prev];
+        keep.count = (keep.count ?? 1) + 1;
+        keep.time = row.time;
+        rows.splice(rows.indexOf(keep), 1);
+        rows.splice(rows.indexOf(row), 1);
+        rows.unshift(keep);
+      } else row.key = key;
     }
     renderLog();
     post({ t: 'rpc-res', raw: JSON.stringify(resp) });

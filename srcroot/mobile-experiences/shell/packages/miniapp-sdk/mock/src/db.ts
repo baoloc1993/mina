@@ -79,16 +79,18 @@ export interface PrepareResult {
 export function prepareDatabase(d: SqlDriver, manifest: Manifest, tablePrefix: string, migrations: Migration[]): PrepareResult {
   const res: PrepareResult = { applied: [], skipped: [], addedColumns: [], warnings: [] };
   d.exec(CORE_DDL);
+  // Sổ migration khoá theo app: nhiều app dùng chung một DB (như shell) và đều có thể có 001_init.sql.
+  const key = (n: string) => `${manifest.id}:${n}`;
   const done = new Set(d.all('SELECT name FROM _mock_migrations', []).map((r) => String(r.name)));
   for (const m of [...migrations].sort((a, b) => a.name.localeCompare(b.name))) {
-    if (done.has(m.name)) {
+    if (done.has(key(m.name))) {
       res.skipped.push(m.name);
       continue;
     }
     d.exec('BEGIN');
     try {
       d.exec(m.sql);
-      d.run('INSERT INTO _mock_migrations (name) VALUES (?)', [m.name]);
+      d.run('INSERT INTO _mock_migrations (name) VALUES (?)', [key(m.name)]);
       d.exec('COMMIT');
     } catch (e) {
       try {

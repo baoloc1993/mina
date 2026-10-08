@@ -105,7 +105,7 @@
       if (r.file_id && thumbs[r.file_id]) { var img = document.createElement('img'); img.src = thumbs[r.file_id]; img.alt = 'Ảnh đính kèm'; li.appendChild(img); }
       var body = document.createElement('div'); body.className = 'body';
       var t = document.createElement('div'); t.className = 't'; t.textContent = r.title;
-      var w = document.createElement('div'); w.className = 'muted'; w.textContent = when(r.at);
+      var w = document.createElement('div'); w.className = 'muted'; w.textContent = when(r.at_ms);
       body.appendChild(t); body.appendChild(w);
       li.appendChild(body);
       ul.appendChild(li);
@@ -118,7 +118,7 @@
     }));
   }
   function refresh() {
-    return m.db.query('SELECT id, title, at, file_id FROM reminders ORDER BY at, id', [])
+    return m.db.query('SELECT id, title, at_ms, file_id FROM reminders ORDER BY at_ms, id', [])
       .then(function (rows) { return loadThumbs(rows).then(function () { render(rows); return rows; }); })
       .catch(function (e) { log('[query] lỗi: ' + e.code + ' — ' + e.message); return []; });
   }
@@ -139,7 +139,7 @@
     var p = i.payload || {};
     if (i.type === 'cal.reminder.create') {
       var id = crypto.randomUUID();
-      return m.db.execute('INSERT INTO reminders (id, title, at) VALUES (?, ?, ?)', [id, p.title, p.at])
+      return m.db.execute('INSERT INTO reminders (id, title, at_ms) VALUES (?, ?, ?)', [id, p.title, p.at])
         .then(function () {
           // at trong quá khứ → shell cho kêu ngay; id trùng → thay
           return m.notify.schedule({ id: id, at: p.at, title: p.title, body: 'Nhắc từ lịch', ref: { reminderId: id } });

@@ -125,8 +125,11 @@ export class RuntimeImpl implements Runtime {
   // ---------- khởi động ----------
   async init(): Promise<void> {
     try {
+      console.log('[rt] init: clock');
       const clock = await createClock();
+      console.log('[rt] init: db');
       this.db = await openDatabase();
+      console.log('[rt] init: db ok');
       this.repo = new PowerSyncAppRepo(this.db);
       this.files = new FileStore(this.db, () => this.s.session?.tenantId ?? null);
       this.ent = new EntitlementStore(clock, async (c) => {
@@ -144,7 +147,7 @@ export class RuntimeImpl implements Runtime {
         trustedKeys: () => this.trustedKeys(),
         newScratch,
         repo: this.repo,
-        onSchemaChanged: () => rebuildSchema(this.db),
+        onSchemaChanged: () => this.applySchema(),
         now: () => new Date().toISOString(),
         rand: () => Math.random().toString(36).slice(2, 8),
         recordFailure: async (appId, version, code, detail) => {
@@ -167,11 +170,14 @@ export class RuntimeImpl implements Runtime {
       supabase.auth.onAuthStateChange((event) => {
         if (event === 'SIGNED_OUT' && this.s.session && !this.signedOutByUs) void this.expire('expired');
       });
+      console.log('[rt] init: session');
       const { data } = await supabase.auth.getSession();
+      console.log('[rt] init: apps');
       await this.refreshApps();
       this.set({ catalog: { ...this.s.catalog, fetchedAt }, entitlement: this.ent.state });
       this.recomputeCatalog(true);
       if (data.session) await this.startSession(data.session.access_token);
+      console.log('[rt] init: ready');
       this.set({ boot: 'ready' });
       this.tickTimer = setInterval(() => void this.tick(), 1000);
       AppState.addEventListener('change', (st) => {
@@ -180,7 +186,19 @@ export class RuntimeImpl implements Runtime {
       onNotificationTap(({ appId, ref }) => void this.openFromNotification(appId, ref));
       void restoreNotifications(this.db).catch(() => undefined);
     } catch (e) {
+      console.log('[rt] init failed', (e as Error).message);
       this.set({ boot: 'error', bootError: (e as Error).message });
+    }
+  }
+
+  /** PowerSync chỉ cho `updateSchema` khi đã ngắt kết nối: ngắt → cập nhật → nối lại (hàng đợi upload giữ nguyên). */
+  private async applySchema(): Promise<void> {
+    const wasConnected = !!this.db.connected || !!this.db.connecting;
+    if (wasConnected) await this.db.disconnect();
+    try {
+      await rebuildSchema(this.db);
+    } finally {
+      if (wasConnected && this.s.session) void this.db.connect(new Connector(this.hooks())).catch(() => undefined);
     }
   }
 
@@ -214,8 +232,9 @@ export class RuntimeImpl implements Runtime {
     this.signedOutByUs = false;
     const info = this.sessionInfoFrom(token);
     if (info.sub) await kvSet(this.db, 'last_sub', info.sub);
+    console.log('[rt] startSession', info.email);
     this.set({ session: info, loginHint: null });
-    await this.db.connect(new Connector(this.hooks()));
+    void this.db.connect(new Connector(this.hooks())).catch(() => undefined);
 
     void registerDevice().catch(() => undefined);
     void this.refreshCatalog(true);
@@ -234,6 +253,7 @@ export class RuntimeImpl implements Runtime {
   }
 
   async completeSignIn(): ReturnType<Runtime['completeSignIn']> {
+    console.log('[rt] completeSignIn');
     const { data } = await supabase.auth.getSession();
     if (!data.session) return { ok: false, needsChoice: { pending: 0 } };
     const sub = claimsOf(data.session.access_token).sub ?? null;
@@ -385,6 +405,7 @@ export class RuntimeImpl implements Runtime {
       this.recomputeCatalog(this.s.catalog.fromCache);
     } catch (e) {
       const code = e instanceof PackageError ? e.code : e instanceof UnauthorizedError ? 'UNAUTHORIZED' : 'INTERNAL';
+      console.log('[rt] install failed', appId, code, (e as Error).message, (e as Error).stack?.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
       this.setInstalling(appId, { step: this.s.installing[appId]?.step ?? 'download', error: { code, message: (e as Error).message } });
       if (e instanceof UnauthorizedError) void this.expire('expired');
       throw e;
@@ -759,7 +780,7 @@ export class RuntimeImpl implements Runtime {
   retrySync = async (): Promise<void> => {
     if (!this.s.session) return;
     await this.db.disconnect().catch(() => undefined);
-    await this.db.connect(new Connector(this.hooks()));
+    void this.db.connect(new Connector(this.hooks())).catch(() => undefined);
 
   };
 

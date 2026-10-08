@@ -186,8 +186,9 @@ def seed() -> None:
     else:
         print("  CHƯA CHẠY THỬ hello 0.3.0 draft: registry chưa có hello >= 0.2.0 (fixture miniapp-hello chưa nâng) — chạy lại seed sau")
     if bad:
-        registry("add-tester", bad["id"], bad["version"], USERS[0])
-        print(f"  {bad['id']}@{bad['version']} draft — tenant-a là tester")
+        # KHÔNG add-tester ở đây: tester thấy bản draft là bản mới nhất ngay ở catalog và cài thẳng bản lỗi.
+        # Test AC-3: cài hello 0.2.0 trước, rồi: npm run registry -- add-tester vn.app.hello 0.3.0 a@test.local
+        print(f"  {bad['id']}@{bad['version']} draft (chưa có tester) — thêm tester khi test AC-3 (xem README backend)")
 
     ta = tenants[USERS[0]]
     for tag_id, name, color in CORE_TAGS:

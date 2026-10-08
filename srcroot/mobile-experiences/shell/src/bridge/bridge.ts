@@ -302,7 +302,7 @@ const METHODS: Record<string, MethodDef> = {
         throw new BridgeError(
           'INTENT_REJECTED',
           `Payload không hợp lệ: ${first?.message ?? 'sai schema'}`,
-          first ? first.instancePath || '/' : undefined,
+          first ? `${first.instancePath || ''}${(first.params as { missingProperty?: string })?.missingProperty ? '/' + (first.params as { missingProperty: string }).missingProperty : ''}` || '/' : undefined,
         );
       }
       const status = await ctx.host.intent.deliver({

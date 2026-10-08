@@ -12,13 +12,18 @@ type Msg =
   | { k: 'who' }
   | { k: 'bye'; id: string }
   | { k: 'intent'; nonce: string; msg: IntentMessage }
-  | { k: 'ack'; nonce: string; handled: boolean };
+  | { k: 'ack'; nonce: string; handled: boolean }
+  | { k: 'db' };
 
 export interface TabBus extends IntentBus {
   /** Báo (lại) manifest của tab này — gọi khi nạp và khi người dùng đổi scope. */
   announce(manifest: Manifest): void;
   /** Đăng ký hàm nhận intent cho tab này; trả true nếu app đã xử lý. */
   onIntent(fn: (msg: IntentMessage) => boolean | Promise<boolean>): void;
+  /** Báo các tab khác: ảnh chụp DB dùng chung vừa được lưu. */
+  notifyDb(): void;
+  /** Nhận báo từ tab khác để nạp lại DB. */
+  onDb(fn: () => void): void;
   close(): void;
 }
 
@@ -26,6 +31,7 @@ export function createTabBus(self: () => Manifest, name = CHANNEL): TabBus {
   const ch = new BroadcastChannel(name);
   const peers = new Map<string, Manifest>();
   const waiting = new Map<string, (handled: boolean) => void>();
+  let dbListener: (() => void) | null = null;
   let handler: ((msg: IntentMessage) => boolean | Promise<boolean>) | null = null;
   const send = (m: Msg) => ch.postMessage(m);
 
@@ -44,6 +50,8 @@ export function createTabBus(self: () => Manifest, name = CHANNEL): TabBus {
         handled = false;
       }
       send({ k: 'ack', nonce: m.nonce, handled });
+    } else if (m.k === 'db') {
+      dbListener?.();
     } else if (m.k === 'ack') {
       waiting.get(m.nonce)?.(m.handled);
     }
@@ -62,6 +70,10 @@ export function createTabBus(self: () => Manifest, name = CHANNEL): TabBus {
     },
     onIntent: (fn) => {
       handler = fn;
+    },
+    notifyDb: () => send({ k: 'db' }),
+    onDb: (fn) => {
+      dbListener = fn;
     },
     deliver: (msg) =>
       new Promise<IntentOutcome>((resolve) => {

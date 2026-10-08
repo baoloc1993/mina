@@ -42,6 +42,10 @@ async function idbPut(key: string, bytes: Uint8Array | null): Promise<void> {
 }
 
 export interface WasmDb extends SqlDriver {
+  /** Gọi sau mỗi lần ảnh chụp được lưu xong (để báo tab khác). */
+  onSaved?: () => void;
+  /** Nạp lại DB từ ảnh chụp mới nhất trong IndexedDB (tab khác vừa ghi). */
+  reload(): Promise<void>;
   /** Lưu ảnh chụp DB (gọi sau khi ghi; tự gom 300 ms). */
   persist(): void;
   /** Xoá sạch DB đã lưu (nút "Đặt lại DB"). */
@@ -55,26 +59,33 @@ export async function openWasmDb(key: string): Promise<WasmDb> {
   let restored = false;
 
   const saved = await idbGet(key);
-  if (saved && saved.byteLength) {
+  const load = (bytes: Uint8Array): boolean => {
     try {
-      const p = sqlite3.wasm.allocFromTypedArray(saved);
+      const p = sqlite3.wasm.allocFromTypedArray(bytes);
       const rc = sqlite3.capi.sqlite3_deserialize(
         db.pointer!,
         'main',
         p,
-        saved.byteLength,
-        saved.byteLength,
+        bytes.byteLength,
+        bytes.byteLength,
         sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
       );
-      restored = rc === 0;
-    } catch {
-      restored = false;
+      if (rc !== 0) console.warn('[mock] sqlite3_deserialize rc=' + rc);
+      return rc === 0;
+    } catch (e) {
+      console.warn('[mock] nạp ảnh chụp DB lỗi', e);
+      return false;
     }
-  }
+  };
+  if (saved && saved.byteLength) restored = load(saved);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   const driver: WasmDb = {
     restored,
+    reload: async () => {
+      const b = await idbGet(key);
+      if (b && b.byteLength) load(b);
+    },
     exec: (sql) => void db.exec(sql),
     all: (sql, params) =>
       db.exec({ sql, bind: params as never, rowMode: 'object', returnValue: 'resultRows' }) as unknown as Record<string, unknown>[],
@@ -84,7 +95,7 @@ export async function openWasmDb(key: string): Promise<WasmDb> {
       timer = setTimeout(() => {
         timer = null;
         try {
-          void idbPut(key, sqlite3.capi.sqlite3_js_db_export(db.pointer!));
+          void idbPut(key, sqlite3.capi.sqlite3_js_db_export(db.pointer!)).then(() => driver.onSaved?.());
         } catch {
           /* bỏ qua */
         }
