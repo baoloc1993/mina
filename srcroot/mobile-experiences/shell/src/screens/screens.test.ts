@@ -32,14 +32,14 @@ describe('text', () => {
     expect(planLine(null)).toContain('Chưa xác minh');
   });
   it('readOnlyBannerText, rejectionTitle', () => {
-    expect(readOnlyBannerText('grace-over')).toContain('quá ân hạn');
+    expect(readOnlyBannerText('grace-over')).toContain('Chỉ đọc');
     expect(readOnlyBannerText('clock-rolled-back')).toContain('đồng hồ');
     const r = { id: '1', source: 'server', app: 'x', table: 'app_hello_items', op: 'PATCH', code: 'FORBIDDEN', detail: null, data: null, createdAt: '' } as const;
     expect(rejectionTitle(r, 'Hello')).toBe('Hello · app_hello_items · PATCH');
     expect(rejectionTitle({ ...r, table: null, op: null }, 'Hello')).toBe('Hello');
     expect(rejectionTitle({ ...r, source: 'local' }, 'Hello', '0.3.0')).toBe('Hello · cập nhật 0.3.0');
     expect(rejectionBannerText(1, [{ ...r, source: 'local' }])).toBe('1 app không cập nhật được');
-    expect(rejectionBannerText(2, [r])).toBe('2 thay đổi bị từ chối khi đồng bộ');
+    expect(rejectionBannerText(2, [r])).toBe('2 thay đổi bị từ chối');
   });
 });
 

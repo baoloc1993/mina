@@ -1,6 +1,6 @@
 // C8 banner ngang: cảnh báo (warning: offline, chỉ đọc, cần mạng để cài) · lỗi (danger: bản bị thu hồi) · thông tin (primary).
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Button } from './Button';
 import { Glyph } from './Glyph';
 import { Txt, toneColor, type Tone } from './Txt';
@@ -19,15 +19,19 @@ interface Props {
   text: string;
   actionLabel?: string;
   onAction?(): void;
+  /** Cả banner bấm được (thay cho nút) — gọn hơn ở màn thấp. */
+  onPress?(): void;
   testID?: string;
 }
 
-export function Banner({ tone, text, actionLabel, onAction, testID }: Props) {
+export function Banner({ tone, text, actionLabel, onAction, onPress, testID }: Props) {
   const m = MAP[tone];
+  const Wrap = onPress ? Pressable : View;
   return (
-    <View
+    <Wrap
+      {...(onPress ? { onPress } : {})}
       testID={testID}
-      accessibilityRole="alert"
+      accessibilityRole={onPress ? 'button' : 'alert'}
       accessibilityLabel={`${m.label}: ${text}`}
       style={[styles.banner, { borderLeftColor: toneColor[m.tone] }]}
     >
@@ -36,7 +40,12 @@ export function Banner({ tone, text, actionLabel, onAction, testID }: Props) {
         {text}
       </Txt>
       {actionLabel && onAction ? <Button title={actionLabel} onPress={onAction} variant="secondary" compact /> : null}
-    </View>
+      {onPress ? (
+        <Txt size="lg" tone={m.tone} accessibilityElementsHidden importantForAccessibility="no">
+          ›
+        </Txt>
+      ) : null}
+    </Wrap>
   );
 }
 

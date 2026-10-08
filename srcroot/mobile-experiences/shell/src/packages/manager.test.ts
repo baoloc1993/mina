@@ -230,6 +230,7 @@ describe('AC-2 cài với gói ký thật', () => {
     t.setInstallError(new PackageError('QUOTA_EXCEEDED', 'hết quota'));
     await expect(t.pm.install(app)).rejects.toMatchObject({ code: 'QUOTA_EXCEEDED' });
     expect(t.fs.files.size).toBe(0);
+    expect(t.fs.dirs.has('file:///docs/apps/vn.app.hello')).toBe(false); // không sót thư mục rỗng của app
     expect(t.rows.size).toBe(0);
     expect(t.schemaChanges).toBe(0);
   });

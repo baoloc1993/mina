@@ -178,16 +178,16 @@ def seed() -> None:
     print("  cài vn.app.hello cho cả 2 tenant, vn.app.private-a cho tenant-a (hello-cal chưa cài — cài từ launcher)")
 
     # hello 0.5.0 DRAFT migration lỗi (test rollback AC-3): chỉ tenant-a thấy. Publish SAU hello 0.4.1 (version phải tăng).
-    # Chưa có hello >= 0.4.1 thì KHÔNG publish 0.5.0 (sẽ chặn publish 0.2.0 về sau vì version phải tăng) — chạy lại seed sau.
-    hello_ok = sql("select 1 from app_versions where app_id = 'vn.app.hello' and string_to_array(version, '.')::int[] >= array[0,4,1] limit 1")
+    # Chưa có hello >= 0.4.3 thì KHÔNG publish 0.5.0 (sẽ chặn publish 0.2.0 về sau vì version phải tăng) — chạy lại seed sau.
+    hello_ok = sql("select 1 from app_versions where app_id = 'vn.app.hello' and string_to_array(version, '.')::int[] >= array[0,4,3] limit 1")
     bad = None
     if hello_ok:
         bad = publish_fixture(stage_fixture("hello-bad", HELLO_BAD_FIXTURE), "hello 0.5.0 draft (fixtures/miniapp-hello-bad-migration)", promote=False)
     else:
-        print("  CHƯA CHẠY THỬ hello 0.5.0 draft: registry chưa có hello >= 0.4.1 (fixture miniapp-hello chưa nâng) — chạy lại seed sau")
+        print("  CHƯA CHẠY THỬ hello 0.5.0 draft: registry chưa có hello >= 0.4.3 (fixture miniapp-hello chưa nâng) — chạy lại seed sau")
     if bad:
         # KHÔNG add-tester ở đây: tester thấy bản draft là bản mới nhất ngay ở catalog và cài thẳng bản lỗi.
-        # Test AC-3: cài hello 0.4.1 trước, rồi: npm run registry -- add-tester vn.app.hello 0.5.0 a@test.local
+        # Test AC-3: cài hello 0.4.3 trước, rồi: npm run registry -- add-tester vn.app.hello 0.5.0 a@test.local
         print(f"  {bad['id']}@{bad['version']} draft (chưa có tester) — thêm tester khi test AC-3 (xem README backend)")
 
     ta = tenants[USERS[0]]

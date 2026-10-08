@@ -89,6 +89,7 @@ export class RuntimeImpl implements Runtime {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private watchdogBusy = false;
   private reachable = true;
+  private probeFails = 0;
   private lastRetry = 0;
   private connected = false;
   private updateTried = new Set<string>();
@@ -550,10 +551,13 @@ export class RuntimeImpl implements Runtime {
   private async suspendAndRemove(appId: string): Promise<void> {
     const ch = this.channels.get(appId);
     if (ch && this.readyApps.has(appId)) {
-      const ack = new Promise<void>((res) => this.suspendWaiters.set(appId, res));
+      const t0 = Date.now();
+      let acked = false;
+      const ack = new Promise<void>((res) => this.suspendWaiters.set(appId, () => ((acked = true), res())));
       ch.emit('suspend', {});
       await Promise.race([ack, sleep(SUSPEND_ACK_MS)]);
       this.suspendWaiters.delete(appId);
+      console.log(`[rt] suspend ${appId}: ${acked ? 'ack' : 'hết giờ'} sau ${Date.now() - t0} ms`);
     }
     this.live.remove(appId);
     this.infos.delete(appId);
@@ -787,12 +791,14 @@ export class RuntimeImpl implements Runtime {
       const to = setTimeout(() => ctl.abort(), 2000);
       const r = await fetch(`${config.powersyncUrl}/probes/liveness`, { signal: ctl.signal, headers: { connection: 'close' } });
       clearTimeout(to);
-      this.reachable = r.ok;
+      this.probeFails = r.ok ? 0 : this.probeFails + 1;
     } catch {
-      this.reachable = false;
+      this.probeFails++;
     } finally {
       this.watchdogBusy = false;
     }
+    // Chống nháy "Offline" khi máy bận (dogfood vòng 3): chỉ coi là mất mạng sau 2 lần dò hỏng liên tiếp.
+    this.reachable = this.probeFails < 2;
     if (this.reachable && (!was || !connected) && !this.db.connecting && Date.now() - this.lastRetry > 8000) {
       this.lastRetry = Date.now();
       await this.retrySync();

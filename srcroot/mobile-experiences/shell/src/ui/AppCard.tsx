@@ -40,14 +40,14 @@ export function AppCard({ item, progress, fromCache, onPress, onInstall, onOpen,
           <Txt size="lg" weight="title" tone={unsafe ? 'danger' : 'text'} style={styles.name}>
             {item.name}
           </Txt>
-          {privateApp ? (
-            <View style={styles.tag}>
-              <Txt size="sm" weight="label" tone="warning">
-                riêng của bạn
-              </Txt>
-            </View>
-          ) : null}
         </View>
+        {privateApp ? (
+          <View style={styles.tag}>
+            <Txt size="sm" weight="label" tone="warning">
+              riêng của bạn
+            </Txt>
+          </View>
+        ) : null}
         {item.description ? (
           <Txt size="sm" tone="muted" numberOfLines={3}>
             {item.description}
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   meta: { flex: 1, minWidth: 0, gap: space.xs },
   nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm },
   name: { flexShrink: 1 },
-  tag: { borderWidth: stroke.thin, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.sm },
+  tag: { alignSelf: 'flex-start', borderWidth: stroke.thin, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.sm },
   top: { alignSelf: 'flex-start' },
   inline: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   act: { marginTop: space.sm, gap: space.xs, alignSelf: 'stretch' },

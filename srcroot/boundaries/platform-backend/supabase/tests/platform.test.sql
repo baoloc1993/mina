@@ -105,7 +105,7 @@ select throws_ok($$update public.app_versions set sha256 = repeat('b', 64) where
 create function pg_temp.cat(p_tenant uuid) returns text language sql as $$
   select coalesce(string_agg(id || '@' || coalesce(version, 'null') || ':' || coalesce(status, '-') || case when installed then ':cài' else '' end,
                              ', ' order by id), '(rỗng)')
-    from public.catalog_for(p_tenant) where id not in ('vn.app.hello', 'vn.app.hello-cal', 'vn.app.private-a')
+    from public.catalog_for(p_tenant) where id like 'vn.app.pub%' or id = 'vn.app.priv-a'
 $$;
 select is(pg_temp.cat((select ta from ids)), '(rỗng)', 'chưa có bản published / chưa được thử: catalog rỗng');
 insert into public.app_version_testers (app_id, version, tenant_id) values ('vn.app.pub1', '1.0.0', (select ta from ids));
@@ -233,7 +233,20 @@ begin
     if n = 0 then
       -- Bảng của mini app đã publish (vd app riêng của seed) có thể đang rỗng: thêm một dòng của A trong transaction test.
       begin
-        execute format('insert into public.%I (id, tenant_id) values (gen_random_uuid(), %L)', r.t, (select ta from ids));
+        -- Cột bắt buộc không có default (vd title của app mẫu): điền giá trị theo kiểu.
+        declare cols text := 'id, tenant_id'; vals text := format('gen_random_uuid(), %L', (select ta from ids)); c record;
+        begin
+          for c in select column_name, data_type from information_schema.columns
+                    where table_schema = 'public' and table_name = r.t and is_nullable = 'NO' and column_default is null
+                      and column_name not in ('id', 'tenant_id') loop
+            cols := cols || ', ' || quote_ident(c.column_name);
+            vals := vals || ', ' || case when c.data_type in ('integer', 'bigint', 'smallint', 'numeric') then '0'
+                                         when c.data_type = 'uuid' then 'gen_random_uuid()'
+                                         when c.data_type like 'timestamp%' then 'now()'
+                                         when c.data_type = 'boolean' then 'false' else quote_literal('x') end;
+          end loop;
+          execute format('insert into public.%I (%s) values (%s)', r.t, cols, vals);
+        end;
       exception when others then
         insert into rls_fail values (r.t, 'bảng không có dòng nào của A và không chèn được — test RLS vô nghĩa (' || sqlerrm || ')');
       end;

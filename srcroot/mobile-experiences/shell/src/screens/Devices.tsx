@@ -125,7 +125,7 @@ export function DevicesScreen({ nav }: { nav: Nav }) {
   return (
     <Screen>
       <TitleBar title="Thiết bị" onBack={nav.back} />
-      <Body>
+      <Body scrollEndOnKeyboard>
         {offline ? <Banner tone="warning" text="Offline — không thu hồi thiết bị được (OFFLINE)" /> : null}
         {list}
         {me || devices === null ? (

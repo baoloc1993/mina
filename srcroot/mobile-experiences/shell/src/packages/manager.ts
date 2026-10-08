@@ -113,6 +113,16 @@ export class PackageManager {
   async install(app: CatalogApp, step: StepFn = () => undefined): Promise<AppRow> {
     const existing = await this.d.repo.get(app.id);
     if (existing && existing.status === 'ok' && existing.current_version === app.version) return existing;
+    try {
+      return await this.installInner(app, step);
+    } catch (e) {
+      // Cài thất bại ở bất kỳ bước nào ⇒ không còn vết: cả thư mục `<apps>/<id>/` rỗng (chỉ khi chưa có bản nào trên máy).
+      if (!existing) await this.d.fs.rm(this.appDir(app.id));
+      throw e;
+    }
+  }
+
+  private async installInner(app: CatalogApp, step: StepFn): Promise<AppRow> {
     const s = await this.stage(app, step);
     try {
       step('migrate');

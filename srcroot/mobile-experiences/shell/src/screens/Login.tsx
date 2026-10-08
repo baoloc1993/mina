@@ -160,7 +160,6 @@ export function LoginScreen() {
         </View>
 
         {rt.loginHint ? <Banner tone="warning" text={HINT_TEXT[rt.loginHint]} /> : null}
-        {offline ? <Banner tone="warning" text="Đang offline — cần mạng để đăng nhập" /> : null}
 
         {step === 'email' ? (
           <View style={styles.group}>
@@ -171,7 +170,7 @@ export function LoginScreen() {
                 setEmail(v);
                 setEmailErr(null);
               }}
-              error={emailErr}
+              invalid={!!emailErr}
               placeholder="ten@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -194,7 +193,7 @@ export function LoginScreen() {
                 setCode(v.replace(/\D/g, ''));
                 setCodeErr(null);
               }}
-              error={codeErr}
+              invalid={!!codeErr}
               placeholder="••••••"
               keyboardType="number-pad"
               inputMode="numeric"
@@ -232,6 +231,12 @@ export function LoginScreen() {
             />
           </View>
         )}
+        {/* Thông báo lỗi / offline nằm DƯỚI các nút để không làm nút nhảy vị trí. */}
+        {(step === 'email' ? emailErr : codeErr) ? (
+          <Txt size="sm" tone="danger" accessibilityLiveRegion="polite">
+            {step === 'email' ? emailErr : codeErr}
+          </Txt>
+        ) : null}
 
         <Txt tone="muted" center>
           hoặc
@@ -259,6 +264,7 @@ export function LoginScreen() {
             </Txt>
           ) : null}
         </View>
+        {offline ? <Banner tone="warning" text="Đang offline — cần mạng để đăng nhập" /> : null}
       </Body>
 
       <ConfirmDialog

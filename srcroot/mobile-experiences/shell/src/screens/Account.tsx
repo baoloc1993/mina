@@ -126,7 +126,7 @@ export function AccountScreen({ nav }: { nav: Nav }) {
             onPress={() => void link('apple')}
           />
           <ListRow title="Thiết bị" subtitle="Các máy đang đăng nhập" onPress={() => nav.push({ name: 'devices' })} />
-          <ListRow title="Đồng bộ" subtitle={chipInfo(rt.sync.state, rt.sync.rejected).text} onPress={() => nav.push({ name: 'sync' })} />
+          <ListRow title="Đồng bộ" subtitle={rt.pendingChanges > 0 ? `${chipInfo(rt.sync.state, rt.sync.rejected).text} · đang chờ gửi ${rt.pendingChanges} thay đổi` : chipInfo(rt.sync.state, rt.sync.rejected).text} onPress={() => nav.push({ name: 'sync' })} />
         </ListGroup>
 
         <Button title="Đăng xuất" variant="secondary" busy={signingOut} busyTitle="Đang kiểm tra…" onPress={() => void signOut()} testID="account-signout" />

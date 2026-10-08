@@ -23,7 +23,7 @@
 
   #bar { position: sticky; top: 0; z-index: 2; background: var(--color-bg); padding: var(--space-sm) 0; }
   .row { display: flex; gap: var(--space-sm); }
-  input, textarea { flex: 1; min-width: 0; min-height: var(--tap-min); padding: 0 var(--space-md); font: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+  input, textarea { scroll-margin-top: 140px; flex: 1; min-width: 0; min-height: var(--tap-min); padding: 0 var(--space-md); font: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
   textarea { padding: var(--space-sm) var(--space-md); min-height: 96px; width: 100%; }
   button { min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 var(--space-md); font: inherit; font-weight: 600; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-primary); cursor: pointer; }
   button.primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
@@ -42,7 +42,7 @@
   .group { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
   details { margin-top: var(--space-lg); }
   summary { min-height: var(--tap-min); display: flex; align-items: center; font-weight: 600; font-size: var(--text-lg); cursor: pointer; }
-  #log { font-family: var(--font-sans); font-size: var(--text-sm); white-space: pre-wrap; background: var(--color-surface); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); min-height: var(--tap-min); max-height: 280px; overflow: auto; }
+  #log { overflow-wrap: anywhere; font-family: var(--font-sans); font-size: var(--text-sm); white-space: pre-wrap; background: var(--color-surface); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); min-height: var(--tap-min); max-height: 280px; overflow: auto; }
   #photo { max-width: 100%; max-height: 160px; border-radius: var(--radius-md); margin-top: var(--space-sm); display: none; }
 </style>
 </head>
@@ -65,7 +65,7 @@
 <ul id="list"></ul>
 
 <h2>Nháp</h2>
-<textarea id="draft" placeholder="Gõ dở rồi chuyển app khác — nháp được lưu khi app bị tạm dừng" aria-label="Nháp"></textarea>
+<textarea id="draft" placeholder="Gõ dở rồi chuyển app khác — nháp tự lưu sau 1 giây và khi app bị tạm dừng" aria-label="Nháp"></textarea>
 <div class="muted" id="draft-state">Chưa lưu</div>
 
 <h2>Intent</h2>
@@ -96,7 +96,7 @@
 </div>
 <img id="photo" alt="Ảnh vừa chọn">
 
-<details>
+<details open>
   <summary>Ca phá bridge</summary>
   <div class="group">
     <button data-case="a">(a) bảng không khai</button>
@@ -195,6 +195,9 @@
 
   // ---------- nháp (AC-14): lưu khi bị tạm dừng, khôi phục khi nạp lại ----------
   var draftEl = $('draft');
+  // Lưu định kỳ (1 s sau lần gõ cuối) để app bị kill đột ngột không mất nháp; `suspend` vẫn lưu ngay.
+  var draftTimer = null;
+  draftEl.addEventListener('input', function () { clearTimeout(draftTimer); draftTimer = setTimeout(function () { saveDraft(); }, 1000); });
   function saveDraft() {
     var v = draftEl.value;
     return m.db.query('SELECT id FROM drafts WHERE id = ?', [DRAFT_ID]).then(function (rows) {

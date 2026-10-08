@@ -17,6 +17,15 @@ import { space, tapMin } from '../ui/theme';
 import type { Nav } from './nav';
 import { readOnlyBannerText, rejectionBannerText } from './text';
 
+interface Note {
+  key: string;
+  tone: 'warning' | 'error' | 'info';
+  text: string;
+  actionLabel?: string;
+  onAction?(): void;
+  onPress?(): void;
+}
+
 export function LauncherScreen({ nav }: { nav: Nav }) {
   const rt = useRuntime();
   const [dragging, setDragging] = useState(false);
@@ -30,6 +39,18 @@ export function LauncherScreen({ nav }: { nav: Nav }) {
   const open = (id: string) => {
     runtime.openApp(id).catch((e) => runtime.pushToast({ kind: 'error', text: errorFrom(e) }));
   };
+
+  // Tối đa 2 banner cùng lúc ở màn thấp: 1 banner ưu tiên cao nhất + dòng "+N thông báo" nếu còn nhiều hơn.
+  const notes: Note[] = [];
+  if (rejected > 0) notes.push({ key: 'rej', tone: 'error', text: rejectionBannerText(rejected, rt.rejections), onPress: () => nav.push({ name: 'sync' }) });
+  if (rt.entitlement.readOnly) notes.push({ key: 'ro', tone: 'warning', text: readOnlyBannerText(rt.entitlement.reason), onPress: () => nav.push({ name: 'account' }) });
+  updated.forEach((a) =>
+    notes.push({ key: `u-${a.app_id}`, tone: 'info', text: `${a.name} đã lên ${a.current_version}`, actionLabel: 'Đóng', onAction: () => void runtime.dismissNotice(a.app_id) }),
+  );
+  pending.forEach((a) => notes.push({ key: `p-${a.app_id}`, tone: 'info', text: `${a.name}: bản ${a.pending_version ?? 'mới'} chạy ở lần mở sau` }));
+  removedElsewhere.forEach((a) => notes.push({ key: `r-${a.app_id}`, tone: 'warning', text: `${a.name} đã gỡ ở máy khác` }));
+  const shown = notes.length > 2 ? notes.slice(0, 1) : notes;
+  const extra = notes.length > 2 ? notes.length - 1 : 0;
 
   return (
     <Screen>
@@ -54,27 +75,12 @@ export function LauncherScreen({ nav }: { nav: Nav }) {
         scrollEnabled={!dragging}
         footer={<Button title="＋ Catalog" onPress={() => nav.push({ name: 'catalog' })} testID="launcher-catalog" />}
       >
-        {rt.entitlement.readOnly ? (
-          <Banner tone="warning" text={readOnlyBannerText(rt.entitlement.reason)} actionLabel="Xem" onAction={() => nav.push({ name: 'account' })} />
+        {shown.map((n) => (
+          <Banner key={n.key} tone={n.tone} text={n.text} actionLabel={n.actionLabel} onAction={n.onAction} onPress={n.onPress} />
+        ))}
+        {extra > 0 ? (
+          <Banner tone="info" text={`+${extra} thông báo`} onPress={() => nav.push({ name: rejected > 0 ? 'sync' : 'account' })} />
         ) : null}
-        {rejected > 0 ? (
-          <Banner tone="error" text={rejectionBannerText(rejected, rt.rejections)} actionLabel="Xem" onAction={() => nav.push({ name: 'sync' })} />
-        ) : null}
-        {updated.map((a) => (
-          <Banner
-            key={`u-${a.app_id}`}
-            tone="info"
-            text={`${a.name} đã cập nhật lên ${a.current_version} ở lần mở này`}
-            actionLabel="Đóng"
-            onAction={() => void runtime.dismissNotice(a.app_id)}
-          />
-        ))}
-        {pending.map((a) => (
-          <Banner key={`p-${a.app_id}`} tone="info" text={`${a.name}: bản ${a.pending_version ?? 'mới'} sẽ chạy ở lần mở sau`} />
-        ))}
-        {removedElsewhere.map((a) => (
-          <Banner key={`r-${a.app_id}`} tone="warning" text={`${a.name} đã được gỡ ở máy khác — đang gửi nốt thay đổi chưa đồng bộ`} />
-        ))}
 
         {rt.apps.length === 0 ? (
           <EmptyState text="Chưa cài app nào" actionLabel="Mở catalog" onAction={() => nav.push({ name: 'catalog' })} />

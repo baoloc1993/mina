@@ -37,9 +37,9 @@ describe('manifest fixture', () => {
     for (const t of m.tables) expect(fx.migrations.some((x) => x.sql.includes(`${prefix}_${t}`)), t).toBe(true);
   });
 
-  test('hello 0.2.0 cố ý không khai core.contacts / core.files / notify.local (ca SCOPE_DENIED thật)', () => {
+  test('hello (bản hiện tại) cố ý không khai core.contacts / core.files / notify.local (ca SCOPE_DENIED thật)', () => {
     const m = JSON.parse(readFileSync(join(HELLO, 'manifest.json'), 'utf8'));
-    expect(m.version).toBe('0.2.0');
+    expect(m.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(m.scopes.filter((s: string) => /^core\.(contacts|files)|^notify/.test(s))).toEqual([]);
     expect(m.tables).toEqual(['items', 'drafts']);
     expect(m.network).toEqual(['vnexpress.net']);
@@ -104,7 +104,8 @@ describe('make-clone', () => {
     expect(defaultPrefix('vn.app.hello-b')).toBe('app_vn_app_hello_b');
 
     const m = JSON.parse(readFileSync(join(dest, 'manifest.json'), 'utf8'));
-    expect(m).toMatchObject({ id: 'vn.app.hello-b', name: 'Hello B', version: '0.2.0' });
+    const helloVersion = JSON.parse(readFileSync(join(HELLO, 'manifest.json'), 'utf8')).version;
+    expect(m).toMatchObject({ id: 'vn.app.hello-b', name: 'Hello B', version: helloVersion });
     const sql = readFileSync(join(dest, 'migrations/001_init.sql'), 'utf8');
     expect(sql).toContain('app_vn_app_hello_b_items');
     expect(sql).toContain('app_vn_app_hello_b_drafts');

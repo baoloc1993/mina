@@ -1,7 +1,8 @@
 // Vòng đời nhiều mini app (CAP-RT-01, AC-14): tối đa N WebView sống (kể cả app đang hiện), LRU theo lần hiện gần nhất.
 // App thứ N+1 mở ⇒ app cũ nhất phải nhận `suspend` (≤ 500 ms lưu trạng thái) rồi bị huỷ. THUẦN TS.
 export const MAX_LIVE = 3;
-export const SUSPEND_ACK_MS = 500;
+/** App được hứa ≥ 500 ms để lưu (hợp đồng SDK); shell chờ ack tới 1,5 s trước khi huỷ — việc huỷ chạy nền nên không làm người dùng chờ (đo ở dogfood: ack về > 500 ms trên emulator chậm). */
+export const SUSPEND_ACK_MS = 1500;
 
 export class LiveSet {
   /** Cũ nhất trước. */

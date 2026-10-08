@@ -12,7 +12,7 @@ export function rejectionTitle(r: RejectionRow, appName: string, version?: strin
 /** Banner S2: toàn bộ là lỗi cục bộ (app không cập nhật được) ⇒ nói theo app, không nói "thay đổi". */
 export function rejectionBannerText(count: number, rows: readonly RejectionRow[]): string {
   if (rows.length > 0 && rows.every((r) => r.source === 'local')) return `${rows.length} app không cập nhật được`;
-  return `${count} thay đổi bị từ chối khi đồng bộ`;
+  return `${count} thay đổi bị từ chối`;
 }
 
 export function planLine(plan: { plan: string; max_apps: number | null; until: string | null } | null): string {
@@ -23,6 +23,6 @@ export function planLine(plan: { plan: string; max_apps: number | null; until: s
 }
 
 export function readOnlyBannerText(reason: string): string {
-  if (reason === 'clock-rolled-back') return 'Chỉ đọc: đồng hồ máy bị chỉnh lùi — cần mạng để xác minh lại';
-  return 'Chỉ đọc: gói đã quá ân hạn — cần mạng để xác minh lại';
+  if (reason === 'clock-rolled-back') return 'Chỉ đọc — đồng hồ máy bị lùi, cần mạng';
+  return 'Chỉ đọc — cần mạng để xác minh lại';
 }

@@ -1,11 +1,12 @@
 // C9 hộp thoại xác nhận: mở · đang xử lý · biến thể nguy hiểm đòi gõ đúng chữ (vd "XOÁ" khi xoá hẳn dữ liệu).
 import React, { useEffect, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Button } from './Button';
 import { TextField } from './TextField';
 import { Txt } from './Txt';
 import { matchesConfirmText } from './confirmText';
 import { color, opacity, radius, shadow, space } from './theme';
+import { useKeyboardHeight } from './useKeyboardHeight';
 
 interface Props {
   visible: boolean;
@@ -48,12 +49,18 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!visible) setTyped('');
   }, [visible]);
+  const kb = useKeyboardHeight();
   const ok = !requireText || matchesConfirmText(typed, requireText);
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => !busy && onCancel()}>
       <View style={styles.root}>
         <View style={styles.scrim} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.center} pointerEvents="box-none">
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[styles.center, { paddingBottom: kb }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View accessibilityViewIsModal style={styles.dialog}>
             <Txt size="lg" weight="title" accessibilityRole="header">
               {title}
@@ -96,7 +103,7 @@ export function ConfirmDialog({
               />
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -105,8 +112,8 @@ export function ConfirmDialog({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: color.overlay, opacity: opacity.overlay },
-  center: { flex: 1, justifyContent: 'center', paddingHorizontal: space.md },
-  dialog: { backgroundColor: color.bg, borderRadius: radius.lg, padding: space.lg, gap: space.md, ...shadow },
+  center: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: space.md, paddingVertical: space.md },
+  dialog: { backgroundColor: color.bg, borderRadius: radius.lg, padding: space.md, gap: space.md, ...shadow },
   row: { flexDirection: 'row', gap: space.sm },
   flex: { flex: 1 },
 });

@@ -4,6 +4,7 @@ import React from 'react';
 import { LogBox, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useKeyboardHeight } from './src/ui/useKeyboardHeight';
 import { Router } from './src/screens/Router';
 import { color } from './src/ui/theme';
 
@@ -13,8 +14,9 @@ LogBox.ignoreLogs(['[PowerSync]']);
 
 function Shell() {
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardHeight();
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: kb > 0 ? kb : insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <Router />
       <StatusBar style="dark" />
     </View>

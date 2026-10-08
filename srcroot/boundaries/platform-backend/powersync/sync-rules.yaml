@@ -21,6 +21,11 @@ bucket_definitions:
     data:
       - select * from app_hello_drafts where tenant_id = bucket.tenant_id
       - select * from app_hello_items where tenant_id = bucket.tenant_id
+  app_vn_app_hello_b:
+    parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.hello-b' and enabled = true
+    data:
+      - select * from app_vn_app_hello_b_drafts where tenant_id = bucket.tenant_id
+      - select * from app_vn_app_hello_b_items where tenant_id = bucket.tenant_id
   app_vn_app_hello_cal:
     parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.hello-cal' and enabled = true
     data:

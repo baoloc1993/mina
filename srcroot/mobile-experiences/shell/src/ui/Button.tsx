@@ -52,7 +52,7 @@ export function Button({ title, onPress, variant = 'primary', busy, busyTitle = 
     >
       <View style={styles.row}>
         {busy ? <ActivityIndicator size="small" color={toneColor[v.fg]} /> : null}
-        <Txt weight="label" tone={v.fg} numberOfLines={2} style={styles.label}>
+        <Txt weight="label" tone={v.fg} numberOfLines={busy ? 1 : 2} style={styles.label}>
           {busy ? busyTitle : title}
         </Txt>
       </View>
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     minHeight: tapMin,
     borderRadius: radius.md,
     borderWidth: stroke.thin,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.sm,
     paddingVertical: space.xs,
     justifyContent: 'center',
     alignItems: 'center',

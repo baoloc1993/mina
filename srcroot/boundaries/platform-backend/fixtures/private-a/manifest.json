@@ -1,7 +1,7 @@
 {
   "id": "vn.app.private-a",
   "name": "Riêng của A",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "sdk": "0",
   "entry": "index.html",
   "scopes": ["db"],

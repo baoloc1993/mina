@@ -341,6 +341,10 @@ async function main(): Promise<void> {
 
   // ---------------------------------------------------------------- AC-7, AC-8
   section("AC-7/8 · Quota khi cài + đổi gói bằng tay");
+  // Quota đếm app chung đang bật của tenant: tạm tắt các app chung khác của A (dữ liệu dogfood: hello-cal, hello-b…) để phép thử
+  // độc lập với dữ liệu mẫu — khôi phục sau khi trả A về mvp-unlimited.
+  const stashed = (await q(`select app_id from installations where tenant_id = '${tA}' and enabled and app_id <> 'vn.app.hello' and app_id in (select id from apps where owner_tenant_id is null)`)).map((r: { app_id: string }) => r.app_id);
+  for (const id of stashed) await q(`update installations set enabled = false where tenant_id = '${tA}' and app_id = '${id}'`);
   await q("insert into plans (id, name, max_apps) values ('accept-2', 'Gói thử 2 app', 2)");
   check("set-plan A → gói thử max_apps = 2", registry("set-plan", A_EMAIL, "accept-2").code === 0);
   for (const id of ["vn.app.accept2", "vn.app.accept3"]) {
@@ -354,6 +358,7 @@ async function main(): Promise<void> {
   check("app riêng của A không tính vào quota", (await rpc("install_app", { p_app_id: "vn.app.private-a" }, tokA)).status < 300);
   check("set-plan sai tên gói → PLAN_NOT_FOUND", /PLAN_NOT_FOUND/.test(registry("set-plan", A_EMAIL, "khong-co").out));
   check("set-plan A → mvp-unlimited", registry("set-plan", A_EMAIL, "mvp-unlimited").code === 0);
+  for (const id of stashed) await q(`update installations set enabled = true where tenant_id = '${tA}' and app_id = '${id}'`);
   const i3 = await rpc("install_app", { p_app_id: "vn.app.accept2" }, tokA);
   check("lần cài kế tiếp dùng gói mới → cài được", i3.status < 300, js(i3.body));
   check("tenant B cài app riêng của A → APP_NOT_AVAILABLE", /APP_NOT_AVAILABLE/.test(js((await rpc("install_app", { p_app_id: "vn.app.private-a" }, tokB)).body)));
