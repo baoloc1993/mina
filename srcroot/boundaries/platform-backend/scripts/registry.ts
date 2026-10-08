@@ -5,11 +5,12 @@
 //   npm run registry -- revoke <app> <version>
 //   npm run registry -- add-tester <app> <version> <email>
 //   npm run registry -- set-plan <email> <plan>
+//   npm run registry -- set-entitlement <email> <ISO|null>
 //   npm run registry -- gen-sync-rules
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import pg from "pg";
-import { addTester, promote, revoke, setPlan } from "./lib/admin.ts";
+import { addTester, promote, revoke, setEntitlement, setPlan } from "./lib/admin.ts";
 import { BACKEND_DIR, config, LOCAL_DIR, loadLocalEnv } from "./lib/env.ts";
 import { RegistryError } from "./lib/errors.ts";
 import { publish } from "./lib/publish.ts";
@@ -26,6 +27,7 @@ const USAGE = `Dùng (chạy từ srcroot/boundaries/platform-backend): npm run 
   promote <app> <version>             draft → published (mọi tenant đủ quyền thấy)
   revoke <app> <version>              → revoked (không quay lại được); <app> = id trong manifest, vd vn.app.hello
   set-plan <email> <plan>             đổi gói của tenant (<plan> là id trong bảng plans, vd mvp-unlimited)
+  set-entitlement <email> <ISO|null>  đặt hạn gói của tenant (vd 2026-09-01; quá hạn + 7 ngày ân hạn -> upload 403 READ_ONLY); null = không hết hạn
   gen-sync-rules                      ghi powersync/sync-rules.yaml từ registry; báo có đổi không (đổi mới cần restart PowerSync)`;
 
 const ARGS: Record<string, string> = {
@@ -34,6 +36,7 @@ const ARGS: Record<string, string> = {
   revoke: "revoke <app> <version>",
   "add-tester": "add-tester <app> <version> <email>",
   "set-plan": "set-plan <email> <plan>",
+  "set-entitlement": "set-entitlement <email> <ISO|null>",
 };
 
 const HINTS: Record<string, string> = {
@@ -42,6 +45,8 @@ const HINTS: Record<string, string> = {
     "Chỉ cho phép CREATE TABLE IF NOT EXISTS, ALTER TABLE … ADD COLUMN (nullable hoặc có DEFAULT), CREATE INDEX — trên bảng bắt đầu bằng table_prefix. Muốn đổi/xoá: thêm cột/bảng mới (expand), vòng sau mới gỡ cái cũ.",
   TABLE_OUTSIDE_PREFIX: "Mọi bảng và index của app phải bắt đầu bằng `<table_prefix>_` (mặc định app_ + id đổi . và - thành _).",
   BAD_STATE: "Chỉ draft mới promote/thêm tenant thử; bản đã revoked là cuối cùng — publish version mới (lớn hơn).",
+  BAD_DATE: "Dùng ngày ISO (2026-09-01 hoặc 2026-09-01T00:00:00Z) hoặc chữ null để bỏ hạn.",
+  TENANT_NOT_FOUND: "Email phải là tài khoản đã đăng nhập ít nhất một lần (mỗi user có một tenant).",
   SIGNING_KEY_MISSING: "Chạy `npm run registry -- keygen` (hoặc đặt SIGNING_KEY_PATH tới file PEM Ed25519).",
 };
 
@@ -96,6 +101,7 @@ async function main(): Promise<void> {
             `select a.id, a.visibility, v.version, v.status,
                     (select count(*)::int from public.app_version_testers t where t.app_id = v.app_id and t.version = v.version) as testers
                from public.apps a left join public.app_versions v on v.app_id = a.id
+              where a.id <> '_core'
               order by a.id, string_to_array(v.version, '.')::int[]`,
           )
         ).rows;
@@ -128,6 +134,12 @@ async function main(): Promise<void> {
         await setPlan(db, args[0], args[1]);
         console.log(`Đã đổi gói của ${args[0]} → ${args[1]}.`);
         break;
+      case "set-entitlement": {
+        need(2);
+        const until = await setEntitlement(db, args[0], args[1]);
+        console.log(until ? `Đã đặt hạn gói của ${args[0]} = ${until} (catalog trả until này; upload chuyển chỉ đọc sau ân hạn).` : `Đã bỏ hạn gói của ${args[0]} (entitlement_until = null, không hết hạn).`);
+        break;
+      }
       case "gen-sync-rules": {
         const out = resolve(BACKEND_DIR, "powersync", "sync-rules.yaml");
         const apps = await loadApps(db);

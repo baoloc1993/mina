@@ -1,38 +1,29 @@
 // Local store (CAP-SYNC-01/02/06): PowerSync trên SQLite + SQLCipher. Một file DB cho mọi app.
-import { PowerSyncDatabase, Schema, Table, column } from '@powersync/react-native';
+// Schema động: bảng nền + bảng của app đã cài (suy ra từ migration) + `platform_*` cục bộ.
+import { PowerSyncDatabase } from '@powersync/react-native';
 import { getOrCreateDbKey } from './secureKey';
-import { Connector } from './connector';
-
-// Vòng 1: chỉ bảng của fixture vn.app.hello. `id` do PowerSync tự thêm (text, UUID client sinh).
-const app_hello_items = new Table(
-  {
-    tenant_id: column.text,
-    title: column.text,
-    done: column.integer,
-    created_at: column.text,
-    updated_at: column.text,
-    deleted_at: column.text,
-  },
-  { indexes: {} },
-);
-
-export const AppSchema = new Schema({ app_hello_items });
+import { PowerSyncAppRepo } from './repo';
+import { buildSchema } from './schema';
 
 let db: PowerSyncDatabase | null = null;
 
 export async function openDatabase(): Promise<PowerSyncDatabase> {
   if (db) return db;
   const encryptionKey = await getOrCreateDbKey();
-  db = new PowerSyncDatabase({
-    schema: AppSchema,
+  const d = new PowerSyncDatabase({
+    schema: buildSchema([]),
     database: { dbFilename: 'platform.db', sqliteOptions: { encryptionKey } },
   });
-  await db.init();
-  return db;
+  await d.init();
+  const apps = await new PowerSyncAppRepo(d).list();
+  if (apps.length) await d.updateSchema(buildSchema(apps));
+  db = d;
+  return d;
 }
 
-export async function connectSync(database: PowerSyncDatabase): Promise<void> {
-  await database.connect(new Connector());
+/** Dựng lại schema từ các app đang cài (gọi sau cài / cập nhật / gỡ). */
+export async function rebuildSchema(database: PowerSyncDatabase): Promise<void> {
+  await database.updateSchema(buildSchema(await new PowerSyncAppRepo(database).list()));
 }
 
 export async function disconnectAndClear(database: PowerSyncDatabase): Promise<void> {

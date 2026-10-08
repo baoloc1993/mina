@@ -1,0 +1,29 @@
+/* TỰ SINH từ tokens/tokens.json bằng scripts/build-tokens.mjs — đừng sửa tay. Nguồn: DESIGN-SYSTEM.md §2. */
+:root {
+  --color-bg: #FFFFFF;
+  --color-surface: #F2F4F7;
+  --color-text: #111318;
+  --color-text-muted: #5B6472;
+  --color-primary: #0A5BD3;
+  --color-on-primary: #FFFFFF;
+  --color-border: #6F7886;
+  --color-danger: #C62828;
+  --color-success: #1B7A3E;
+  --color-warning: #8A5200;
+  --color-overlay: #111318;
+  --font-sans: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow: 0 2px 8px rgba(17,19,24,.08);
+  --tap-min: 48px;
+  --icon-app: 64px;
+}

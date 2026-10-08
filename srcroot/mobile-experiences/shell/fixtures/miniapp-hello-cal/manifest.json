@@ -1,0 +1,43 @@
+{
+  "id": "vn.app.hello-cal",
+  "name": "Hello Lịch",
+  "version": "0.1.0",
+  "sdk": "^0.1",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "description": "App mẫu: nhận nhắc từ app khác, thông báo đúng giờ, ảnh, chia sẻ, mạng tới example.com.",
+  "scopes": ["db.own", "core.tags:read", "core.files:read", "notify.local", "storage.files", "net", "ui.native"],
+  "tables": ["reminders"],
+  "intents": {
+    "sends": [],
+    "receives": [
+      {
+        "type": "cal.reminder.create",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "required": ["title", "at"],
+          "properties": {
+            "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "at": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "cal.event.open",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string" },
+            "at": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "network": ["example.com"],
+  "offline": true
+}

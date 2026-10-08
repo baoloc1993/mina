@@ -1,0 +1,10 @@
+{
+  "id": "vn.app.hello",
+  "name": "Hello",
+  "version": "0.3.0",
+  "sdk": "^0.1",
+  "entry": "index.html",
+  "description": "Bản thử có migration cố ý lỗi trên SQLite (kiểm rollback gói, AC-3).",
+  "scopes": ["db.own", "auth.token"],
+  "tables": ["items"]
+}

@@ -203,6 +203,12 @@ update public.app_hello_items set title = 'y', updated_at = '2001-01-01' where i
 select is((select updated_at from public.app_hello_items where id = 'cccccccc-0000-0000-0000-00000000000c'), now(), 'UPDATE: updated_at = giờ server');
 
 -- ---------- AC-9: RLS lặp MỌI bảng public có cột tenant_id ----------
+-- Vòng 3: core_* có cột bắt buộc — chèn sẵn dòng của A để vòng lặp RLS bên dưới có dữ liệu thật.
+insert into public.core_tags (id, tenant_id, name) values (gen_random_uuid(), (select ta from ids), 'việc nhà');
+insert into public.core_contacts (id, tenant_id, name) values (gen_random_uuid(), (select ta from ids), 'Bố');
+insert into public.core_files (id, tenant_id, app_id, name, storage_path)
+  values (gen_random_uuid(), (select ta from ids), 'vn.app.hello', 'anh.jpg', (select ta from ids) || '/f1');
+
 create temp table tt as
   select c.table_name::text as t
     from information_schema.columns c join pg_tables p on p.schemaname = 'public' and p.tablename = c.table_name
@@ -257,6 +263,69 @@ end $$;
 reset role;
 select cmp_ok((select count(*)::int from tt), '>=', 5, 'có ít nhất 5 bảng mang tenant_id để lặp');
 select is((select coalesce(string_agg(t || ': ' || why, '; '), '') from rls_fail), '', 'mọi bảng có tenant_id: B đọc 0 / INSERT giả bị chặn / UPDATE-DELETE 0 dòng của A');
+
+-- ---------- Vòng 3: core_* ----------
+select is((select count(*)::int from tt where t in ('core_tags', 'core_contacts', 'core_files')), 3, 'core_tags / core_contacts / core_files mang tenant_id và nằm trong vòng lặp RLS ở trên');
+select is((select string_agg(table_name, ',' order by table_name) from public.app_tables where app_id = '_core'), 'core_contacts,core_files,core_tags', 'app_tables ghi sổ core_* với app_id = _core (upload nhận ghi)');
+select is((select count(*)::int from public.catalog_for((select ta from ids)) where id = '_core'), 0, 'app ảo _core không bao giờ xuất hiện ở catalog');
+select is((select count(*)::int from pg_publication_tables where pubname = 'powersync' and tablename in ('core_tags', 'core_contacts', 'core_files')), 3, 'core_* nằm trong publication powersync');
+select pg_temp.as_user('aaaaaaaa-0000-0000-0000-0000000000a1', (select ta from ids));
+select throws_ok($$delete from public.core_tags$$, '42501', null, 'client không có quyền DELETE cứng trên core_tags');
+select throws_ok($$insert into public.core_files (id, tenant_id, app_id, name, storage_path, size) values (gen_random_uuid(), (select ta from ids), 'a', 'b', 'c', -1)$$, '23514', null, 'core_files.size âm bị CHECK chặn');
+reset role;
+
+-- ---------- Vòng 3: entitlement_until ----------
+select is((select entitlement_until from public.tenants where id = (select ta from ids)), null, 'entitlement_until mặc định null (không hết hạn)');
+select pg_temp.as_user('aaaaaaaa-0000-0000-0000-0000000000a1', (select ta from ids));
+select is((select entitlement_until from public.tenants where id = (select ta from ids)), null, 'tenant đọc được entitlement_until của mình');
+select throws_ok($$update public.tenants set entitlement_until = now() - interval '30 days'$$, '42501', null, 'tenant không tự đổi được entitlement_until');
+reset role;
+
+-- ---------- Vòng 3: reorder_apps ----------
+insert into public.installations (tenant_id, app_id, version) values
+  ((select ta from ids), 'vn.app.pub1', '1.0.0'), ((select ta from ids), 'vn.app.pub2', '1.0.0'), ((select ta from ids), 'vn.app.pub3', '1.0.0'),
+  ((select tb from ids), 'vn.app.pub1', '1.0.0'), ((select tb from ids), 'vn.app.pub2', '1.0.0')
+  on conflict (tenant_id, app_id) do update set position = null;
+select is((select position from public.installations where tenant_id = (select ta from ids) and app_id = 'vn.app.pub1'), null, 'position mặc định null');
+select pg_temp.as_user('aaaaaaaa-0000-0000-0000-0000000000a1', (select ta from ids));
+select lives_ok($$select public.reorder_apps(array['vn.app.pub2', 'vn.app.pub1', 'vn.app.khong-co', 'vn.app.pub1'])$$, 'reorder_apps chạy được; app lạ và trùng bị bỏ qua');
+select is((select string_agg(app_id || '=' || coalesce(position::text, 'null'), ',' order by app_id) from public.installations where app_id in ('vn.app.pub1', 'vn.app.pub2', 'vn.app.pub3')),
+  'vn.app.pub1=1,vn.app.pub2=0,vn.app.pub3=null', 'position = chỉ số mảng (lần xuất hiện đầu), app không nêu giữ nguyên');
+select throws_ok($$update public.installations set position = 9$$, '42501', null, 'ghi installations trực tiếp vẫn bị chặn (chỉ qua RPC)');
+reset role;
+select pg_temp.as_user('bbbbbbbb-0000-0000-0000-0000000000b1', (select tb from ids));
+select lives_ok($$select public.reorder_apps(array['vn.app.pub2', 'vn.app.pub1', 'vn.app.pub3'])$$, 'B gọi reorder_apps kèm app B chưa cài (pub3) → bỏ qua');
+reset role;
+select is((select string_agg(tenant_id::text || ':' || app_id || '=' || coalesce(position::text, 'null'), ',' order by tenant_id::text, app_id) from public.installations where app_id in ('vn.app.pub1', 'vn.app.pub2', 'vn.app.pub3')),
+  (select string_agg(x, ',' order by x) from (
+     select (select ta from ids)::text || ':vn.app.pub1=1' x union all select (select ta from ids)::text || ':vn.app.pub2=0'
+     union all select (select ta from ids)::text || ':vn.app.pub3=null'
+     union all select (select tb from ids)::text || ':vn.app.pub1=1' union all select (select tb from ids)::text || ':vn.app.pub2=0') q),
+  'reorder_apps của B chỉ đổi installation của B, không đụng A');
+
+-- ---------- Vòng 3: bucket Storage `files` ----------
+select is((select public from storage.buckets where id = 'files'), false, 'bucket files là private');
+insert into storage.objects (bucket_id, name) values
+  ('files', (select ta from ids)::text || '/file-a'), ('files', (select tb from ids)::text || '/file-b'), ('packages', 'vn.app.pub1/1.0.0.zip');
+select pg_temp.as_user('aaaaaaaa-0000-0000-0000-0000000000a1', (select ta from ids));
+select is((select string_agg(name, ',') from storage.objects where bucket_id = 'files'), (select ta from ids)::text || '/file-a', 'tenant A chỉ thấy thư mục của A trong bucket files');
+select is((select count(*)::int from storage.objects where bucket_id = 'packages'), 0, 'tenant không đọc được bucket packages');
+select lives_ok($$insert into storage.objects (bucket_id, name) values ('files', (select ta from ids)::text || '/file-a2')$$, 'A ghi vào thư mục của mình');
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('files', (select tb from ids)::text || '/xam-nhap')$$, '42501', null, 'A không ghi được vào thư mục của B');
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('files', 'khong-co-thu-muc-tenant')$$, '42501', null, 'đường dẫn không có thư mục tenant bị chặn');
+select throws_ok($$update storage.objects set name = (select tb from ids)::text || '/doi-ten' where bucket_id = 'files' and name = (select ta from ids)::text || '/file-a2'$$, '42501', null, 'A không đổi tên object sang thư mục của B (WITH CHECK)');
+create temp table upd_b (n int);
+grant all on upd_b to authenticated;
+do $$ declare c int; begin
+  update storage.objects set metadata = '{}'::jsonb where bucket_id = 'files' and name like (select tb from ids)::text || '/%';
+  get diagnostics c = row_count;
+  insert into upd_b values (c);
+end $$;
+select is((select n from upd_b), 0, 'A không cập nhật được object của B');
+reset role;
+select pg_temp.as_user('bbbbbbbb-0000-0000-0000-0000000000b1', (select tb from ids));
+select is((select string_agg(name, ',') from storage.objects where bucket_id = 'files'), (select tb from ids)::text || '/file-b', 'tenant B chỉ thấy thư mục của B (không thấy file-a, file-a2)');
+reset role;
 
 select * from finish();
 rollback;

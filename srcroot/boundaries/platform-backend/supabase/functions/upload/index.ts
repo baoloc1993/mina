@@ -3,6 +3,7 @@
 // HTTP 200 khi lô hợp lệ; từng thay đổi có `status` (ACCEPTED | IGNORED | REJECTED). `ok` giữ cho connector vòng 1.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, json } from "../_shared/auth.ts";
+import { graceDays, isReadOnly } from "../_shared/entitlement_logic.ts";
 import { MAX_OPS, type Op, type PatchOutcome, processOps, type Rejection, type Store, type StoreError } from "./upload_logic.ts";
 
 function makeStore(token: string, tenantId: string): Store {
@@ -57,6 +58,24 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const caller = await authenticate(req);
   if (caller instanceof Response) return caller;
+
+  // Vòng 3: tenant quá ân hạn -> chỉ đọc. Từ chối CẢ LÔ, không ghi gì, không ghi sync_rejections (client giữ lô để gửi lại).
+  const grace = graceDays(Deno.env.get("ENTITLEMENT_GRACE_DAYS"));
+  const sbUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${caller.token}` } },
+    auth: { persistSession: false },
+  });
+  const ten = await sbUser.from("tenants").select("entitlement_until").eq("id", caller.tenantId).maybeSingle();
+  if (ten.error) {
+    console.error("[upload] đọc entitlement lỗi:", ten.error.message);
+    return json({ error: "INTERNAL" }, 500);
+  }
+  if (isReadOnly(ten.data?.entitlement_until, grace)) {
+    return json({
+      error: "READ_ONLY",
+      detail: `gói của tenant đã hết hạn quá ${grace} ngày ân hạn: chỉ đọc; gia hạn rồi gửi lại (thay đổi chưa gửi vẫn được giữ trên máy)`,
+    }, 403);
+  }
 
   let ops: Op[];
   try {

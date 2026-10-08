@@ -6,13 +6,31 @@ export type CatalogRow = {
   status: string | null; installed: boolean; enabled: boolean;
 };
 
-export type CatalogApp = Omit<CatalogRow, "package_path"> & { package_url: string | null; code?: string };
+export type CatalogApp = Omit<CatalogRow, "package_path"> & {
+  package_url: string | null; position: number | null;
+  description: string | null; scopes: string[]; network: string[]; code?: string;
+};
 
-export function toCatalogApp(row: CatalogRow, signedUrl: string | null): CatalogApp {
+const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** Mô tả + quyền của version đang trả, lấy từ `app_versions.manifest` (shell dịch quyền ra tiếng Việt trước khi cài). */
+export function manifestInfo(manifest: unknown): { description: string | null; scopes: string[]; network: string[] } {
+  const m = manifest && typeof manifest === "object" ? manifest as Record<string, unknown> : {};
+  return {
+    description: typeof m.description === "string" && m.description ? m.description : null,
+    scopes: strArr(m.scopes),
+    network: strArr(m.network),
+  };
+}
+
+/** `position` (vòng 3) = `installations.position`, null nếu chưa cài / chưa xếp. `manifest` = manifest của version đang trả. */
+export function toCatalogApp(row: CatalogRow, signedUrl: string | null, position: number | null = null, manifest: unknown = null): CatalogApp {
   const { package_path: _drop, ...rest } = row;
-  if (row.version === null) return { ...rest, package_url: null, code: "NO_SAFE_VERSION" };
-  if (!signedUrl) return { ...rest, package_url: null, code: "PACKAGE_UNAVAILABLE" };
-  return { ...rest, package_url: signedUrl };
+  const info = row.version === null ? manifestInfo(null) : manifestInfo(manifest);
+  const base = { ...rest, position, ...info };
+  if (row.version === null) return { ...base, package_url: null, code: "NO_SAFE_VERSION" };
+  if (!signedUrl) return { ...base, package_url: null, code: "PACKAGE_UNAVAILABLE" };
+  return { ...base, package_url: signedUrl };
 }
 
 /**

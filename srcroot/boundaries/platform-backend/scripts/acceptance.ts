@@ -184,6 +184,17 @@ async function main(): Promise<void> {
     await q("update tenants set plan = 'mvp-unlimited' where plan <> 'mvp-unlimited'");
     await q("delete from plans where id = 'accept-2'");
     await q("delete from app_hello_items where title like 'ACC:%'");
+    // Vòng 3: dòng core_* thử, hạn gói, thứ tự launcher, object thử trong bucket files (seed core_tags của tenant-a được giữ).
+    for (const t of ["core_tags", "core_contacts", "core_files"]) await q(`delete from ${t} where name like 'ACC:%'`);
+    await q("update tenants set entitlement_until = null where entitlement_until is not null");
+    await q("update installations set position = null where position is not null");
+    const filesBucket = createClient(API, serviceKey, { auth: { persistSession: false } }).storage.from("files");
+    for (const e of [A_EMAIL, B_EMAIL]) {
+      const tid = await tenantOf(e);
+      if (!tid) continue;
+      const objs = ((await filesBucket.list(tid, { limit: 200 })).data ?? []).filter((o) => o.name.startsWith("acc-"));
+      if (objs.length) await filesBucket.remove(objs.map((o) => `${tid}/${o.name}`));
+    }
     for (const e of [A_EMAIL, B_EMAIL]) await q("select public._install_app($1, 'vn.app.hello')", [await tenantOf(e)]);
   };
   await cleanup();
@@ -514,6 +525,118 @@ async function main(): Promise<void> {
   check("lô theo khuôn connector vòng 1 → results[].ok = true", r.status === 200 && r.body.results.every((x: any) => x.ok === true), js(r.body));
   check("issue-app-token giữ khuôn { token, expires_at } cho getAppToken", (await fn("issue-app-token", tokA, { app_id: "vn.app.hello" })).body.expires_at > 0);
   check("done 1/0 của SQLite được Postgres nhận (boolean)", (await row(tokA, id(11))).done === true);
+
+
+  // ---------------------------------------------------------------- W3
+  section("W3 · Vòng 3 (server): catalog entitlement + position, reorder_apps, core_*, READ_ONLY, bucket files");
+  const cat3 = await fn("catalog", tokA, undefined, "GET");
+  const ent = cat3.body.entitlement;
+  check("catalog giữ trường cũ và thêm server_time (ISO, giờ server) + entitlement { plan, max_apps, until, grace_days }",
+    cat3.status === 200 && Array.isArray(cat3.body.apps) && Math.abs(Date.parse(cat3.body.server_time) - Date.now()) < 120000
+      && ent?.plan === "mvp-unlimited" && ent.max_apps === null && ent.until === null && ent.grace_days === 7, js([cat3.body.server_time, ent]));
+  const helloCat = cat3.body.apps.find((a: any) => a.id === "vn.app.hello");
+  check("mỗi app có thêm position / description / scopes / network; trường cũ (package_url, sha256, installed…) còn nguyên",
+    !!helloCat && "position" in helloCat && "description" in helloCat && Array.isArray(helloCat.scopes) && Array.isArray(helloCat.network)
+      && typeof helloCat.package_url === "string" && helloCat.sha256?.length === 64 && helloCat.installed === true, js(helloCat));
+  check("app ảo _core không lộ ra catalog", !cat3.body.apps.some((a: any) => a.id === "_core"));
+
+  // reorder_apps
+  await rpc("install_app", { p_app_id: "vn.app.hello" }, tokA); // AC-9 vừa cài lại; chắc chắn đang bật
+  const ro = await rpc("reorder_apps", { p_app_ids: ["vn.app.private-a", "vn.app.hello", "vn.app.khong-co"] }, tokA);
+  check("reorder_apps của A thành công (app lạ bị bỏ qua)", ro.status < 300, js(ro.body));
+  const catA = (await fn("catalog", tokA, undefined, "GET")).body.apps;
+  check("catalog trả position theo chỉ số mảng của A (private-a = 0, hello = 1)", catA.find((a: any) => a.id === "vn.app.private-a")?.position === 0 && catA.find((a: any) => a.id === "vn.app.hello")?.position === 1, js(catA.map((a: any) => [a.id, a.position])));
+  const roB = await rpc("reorder_apps", { p_app_ids: ["vn.app.hello", "vn.app.private-a"] }, tokB);
+  const posRows = await q("select tenant_id, app_id, position from installations where app_id in ('vn.app.hello','vn.app.private-a')");
+  const pos = (t: string, a: string) => posRows.find((x: any) => x.tenant_id === t && x.app_id === a)?.position;
+  check("reorder_apps của B chỉ đổi installation của B (hello = 0), không chạm A, không cài thêm private-a cho B",
+    roB.status < 300 && pos(tB, "vn.app.hello") === 0 && pos(tA, "vn.app.private-a") === 0 && pos(tA, "vn.app.hello") === 1 && pos(tB, "vn.app.private-a") === undefined, js(posRows));
+  const roAnon = await rpc("reorder_apps", { p_app_ids: ["vn.app.hello"] }, ANON);
+  check("reorder_apps không JWT người dùng → bị từ chối", roAnon.status >= 400, `HTTP ${roAnon.status}`);
+
+  // core_* qua upload
+  const TAG = "00000000-0000-4000-8000-0000acc0c001", CT = "00000000-0000-4000-8000-0000acc0c002", FL = "00000000-0000-4000-8000-0000acc0c003";
+  const fileId = `acc-${Date.now()}`;
+  r = await up(tokA, [
+    { op: "PUT", table: "core_tags", id: TAG, data: { name: "ACC: thẻ", color: "#fff", tenant_id: tB } },
+    { op: "PUT", table: "core_contacts", id: CT, data: { name: "ACC: bác Ba", phone: "0900" } },
+    { op: "PUT", table: "core_files", id: FL, data: { app_id: "vn.app.hello", name: "ACC: ảnh.jpg", mime: "image/jpeg", size: 3, storage_path: `${tA}/${fileId}` } },
+  ]);
+  check("upload nhận ghi core_tags / core_contacts / core_files (qua app_tables '_core')", r.status === 200 && r.body.results.every((x: any) => x.status === "ACCEPTED"), js(r.body));
+  const tagA = ((await rest(`core_tags?id=eq.${TAG}&select=*`, tokA)).body as any[])[0];
+  check("core_tags: tenant_id lấy từ JWT dù client khai tenant B; updated_at do server", tagA?.tenant_id === tA && Date.now() - Date.parse(tagA.updated_at) < 60000, js(tagA));
+  check("tenant B không đọc được core_* của A", (await Promise.all(["core_tags", "core_contacts", "core_files"].map((t) => rest(`${t}?select=id&name=like.ACC:*`, tokB)))).every((x) => Array.isArray(x.body) && x.body.length === 0));
+  r = await up(tokB, [
+    { op: "PATCH", table: "core_tags", id: TAG, data: { name: "ACC: B chiếm" } },
+    { op: "PUT", table: "core_contacts", id: CT, data: { name: "ACC: B chiếm" } },
+    { op: "DELETE", table: "core_files", id: FL },
+  ]);
+  check("tenant B ghi lên dòng core_* của A → REJECTED/FORBIDDEN cả ba, dòng của A nguyên vẹn", r.body.results.every((x: any) => x.code === "FORBIDDEN") && (await q("select name from core_tags where id = $1", [TAG]))[0].name === "ACC: thẻ", js(r.body));
+  r = await up(tokA, [{ op: "DELETE", table: "core_tags", id: TAG }]);
+  check("DELETE core_tags là xoá mềm (deleted_at), dòng còn trong DB", r.body.results[0].status === "ACCEPTED" && !!(await q("select deleted_at from core_tags where id = $1", [TAG]))[0].deleted_at);
+  const dr = await http(`${API}/rest/v1/core_tags?id=eq.${TAG}`, { method: "DELETE", token: tokA });
+  check("client không xoá cứng core_tags qua PostgREST", dr.status >= 400, `HTTP ${dr.status}`);
+
+  // PowerSync: bucket core + installations (có id, position)
+  const bW3 = await psUntil(tokA, (b) => (b.core?.length ?? 0) >= 3 && (b.installations?.length ?? 0) >= 2);
+  check("PowerSync: bucket core kéo core_* của tenant A (thẻ seed + dòng vừa ghi), không lẫn tenant khác", (bW3.core?.length ?? 0) >= 3 && bW3.core.every((x: any) => x.tenant_id === tA), js(Object.keys(bW3)));
+  check("PowerSync: bucket installations có cột id (chuỗi) và position", (bW3.installations?.length ?? 0) >= 2 && bW3.installations.every((x: any) => typeof x.id === "string" && x.id === x.app_id && "position" in x), js(bW3.installations?.[0]));
+  const bwB = await psUntil(tokB, (b) => !!b.core);
+  check("PowerSync: tenant B không nhận core_* của A", (bwB.core ?? []).every((x: any) => x.tenant_id === tB), js(bwB.core?.length));
+
+  // READ_ONLY
+  const TAG2 = "00000000-0000-4000-8000-0000acc0c00a";
+  const rejBefore = (await q("select count(*)::int n from sync_rejections where tenant_id = $1", [tA]))[0].n;
+  const iso = (days: number) => new Date(Date.now() + days * 86400000).toISOString();
+  const bad1 = registry("set-entitlement", A_EMAIL, "hôm qua");
+  check("set-entitlement ngày sai → BAD_DATE (tiếng Việt, kèm gợi ý)", bad1.code !== 0 && /BAD_DATE/.test(bad1.out) && /ISO/.test(bad1.out), bad1.out);
+  const bad2 = registry("set-entitlement", "khong-co@test.local", "null");
+  check("set-entitlement email lạ → TENANT_NOT_FOUND", bad2.code !== 0 && /TENANT_NOT_FOUND/.test(bad2.out), bad2.out);
+  const so = registry("set-entitlement", A_EMAIL, iso(-3));
+  r = await up(tokA, [{ op: "PUT", table: "core_tags", id: TAG2, data: { name: "ACC: trong ân hạn" } }]);
+  check("hết hạn 3 ngày (trong ân hạn 7 ngày) → upload vẫn ghi được", so.code === 0 && r.status === 200 && r.body.results[0].status === "ACCEPTED", js([so.out, r.body]));
+  const catG = (await fn("catalog", tokA, undefined, "GET")).body.entitlement;
+  check("catalog trả entitlement.until đúng giá trị đã đặt", Math.abs(Date.parse(catG.until) - Date.parse(iso(-3))) < 120000, js(catG));
+  registry("set-entitlement", A_EMAIL, iso(-30));
+  const before403 = (await q("select name from core_tags where id = $1", [TAG2]))[0].name;
+  r = await up(tokA, [
+    { op: "PUT", table: "core_tags", id: TAG2, data: { name: "ACC: sau ân hạn" } },
+    { op: "PUT", table: "core_tags", id: "00000000-0000-4000-8000-0000acc0c009", data: { name: "ACC: mới" } },
+  ]);
+  check("quá ân hạn → HTTP 403 { error: READ_ONLY, detail } cho cả lô", r.status === 403 && r.body.error === "READ_ONLY" && typeof r.body.detail === "string", js(r));
+  check("…không ghi gì (dòng cũ không đổi, dòng mới không có)", (await q("select name from core_tags where id = $1", [TAG2]))[0].name === before403 && (await q("select 1 from core_tags where id = '00000000-0000-4000-8000-0000acc0c009'")).length === 0);
+  check("…không sinh sync_rejections", (await q("select count(*)::int n from sync_rejections where tenant_id = $1", [tA]))[0].n === rejBefore);
+  r = await up(tokB, [{ op: "PUT", table: "core_tags", id: "00000000-0000-4000-8000-0000acc0c00b", data: { name: "ACC: B vẫn ghi được" } }]);
+  check("tenant B (không hết hạn) không bị ảnh hưởng", r.status === 200 && r.body.results[0].status === "ACCEPTED", js(r));
+  const catRO = await fn("catalog", tokA, undefined, "GET");
+  check("chỉ đọc vẫn gọi được catalog (cài/gỡ/xem không bị chặn)", catRO.status === 200 && Date.parse(catRO.body.entitlement.until) < Date.now() - 20 * 86400000, js(catRO.body.entitlement));
+  registry("set-entitlement", A_EMAIL, "null");
+  r = await up(tokA, [{ op: "PUT", table: "core_tags", id: TAG2, data: { name: "ACC: hết chỉ đọc" } }]);
+  check("set-entitlement null → hết READ_ONLY, lô ghi được", r.status === 200 && r.body.results[0].status === "ACCEPTED", js(r));
+  check("catalog trả until = null sau khi bỏ hạn", (await fn("catalog", tokA, undefined, "GET")).body.entitlement.until === null);
+
+  // bucket files
+  const userSb = (tok: string) => createClient(API, ANON, { global: { headers: { Authorization: `Bearer ${tok}` } }, auth: { persistSession: false } }).storage.from("files");
+  const sbA = userSb(tokA), sbB = userSb(tokB);
+  const bytes = Buffer.from("xyz");
+  const upA = await sbA.upload(`${tA}/${fileId}`, bytes, { contentType: "image/jpeg" });
+  check("tenant A upload vào <tenant_id>/<file_id> bằng JWT phiên", !upA.error, upA.error?.message);
+  const dlA = await sbA.download(`${tA}/${fileId}`);
+  check("…và tải lại đúng nội dung", !dlA.error && Buffer.from(await dlA.data!.arrayBuffer()).toString() === "xyz", dlA.error?.message);
+  const sg = await sbA.createSignedUrl(`${tA}/${fileId}`, 900);
+  check("URL ký 15 phút tạo được cho file của mình", !sg.error && !!sg.data?.signedUrl, sg.error?.message);
+  const dlB = await sbB.download(`${tA}/${fileId}`);
+  check("tenant B không tải được file của A", !!dlB.error && !dlB.data, dlB.error?.message);
+  const sgB = await sbB.createSignedUrl(`${tA}/${fileId}`, 900);
+  check("tenant B không tạo được URL ký cho file của A", !!sgB.error || !sgB.data?.signedUrl, js(sgB));
+  const upBA = await sbB.upload(`${tA}/acc-xam-nhap`, bytes);
+  check("tenant B không upload vào thư mục của A", !!upBA.error, js(upBA.data));
+  const upFlat = await sbA.upload(`acc-khong-thu-muc`, bytes);
+  check("đường dẫn không có thư mục tenant bị chặn", !!upFlat.error, js(upFlat.data));
+  const listB = await sbB.list(tA);
+  check("tenant B không liệt kê được thư mục của A", !listB.error && (listB.data ?? []).length === 0, js(listB));
+  const anonDl = await createClient(API, ANON, { auth: { persistSession: false } }).storage.from("files").download(`${tA}/${fileId}`);
+  check("không đăng nhập thì không tải được (bucket private)", !!anonDl.error);
 
   // ---------------------------------------------------------------- dọn
   await cleanup();

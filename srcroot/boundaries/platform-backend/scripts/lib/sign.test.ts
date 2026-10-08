@@ -40,12 +40,12 @@ function makeApp(manifest: object): string {
   return dir;
 }
 
-test("zip tái lập (cùng nội dung → cùng sha256), bỏ migrations/, đúng file", () => {
+test("zip tái lập (cùng nội dung → cùng sha256), gồm migrations/, đúng file", () => {
   const dir = makeApp({ id: "vn.app.x", name: "X", version: "1.0.0", sdk: "0", entry: "index.html" });
   try {
     const a = buildZip(dir), b = buildZip(dir);
     assert.equal(sha256(a).toString("hex"), sha256(b).toString("hex"));
-    assert.deepEqual(Object.keys(unzipSync(a)).sort(), ["index.html", "manifest.json"]);
+    assert.deepEqual(Object.keys(unzipSync(a)).sort(), ["index.html", "manifest.json", "migrations/001.sql"]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

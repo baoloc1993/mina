@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { Client } from "pg";
 import { RegistryError } from "./errors.ts";
 import { lintMigration } from "./lint.ts";
-import { buildZip, derivePrefix, type Manifest, readManifest, semverCompare } from "./manifest.ts";
+import { buildZip, derivePrefix, type Manifest, readManifest, receivesOf, semverCompare } from "./manifest.ts";
 import { type Config, requireServiceKey } from "./env.ts";
 import { loadPrivateKey, publicOf, sha256, signDigest } from "./sign.ts";
 
@@ -151,7 +151,7 @@ async function publishLocked(db: Client, cfg: Config, opts: PublishOptions, mani
     }
     const toHarden = new Set([...tables, ...pending.flatMap((m) => m.createdTables)]);
     for (const t of toHarden) await hardenSyncTable(db, appId, t);
-    for (const i of manifest.intents) {
+    for (const i of receivesOf(manifest)) {
       await db.query(
         `insert into public.intent_schemas (type, version, schema, app_id) values ($1, $2, $3, $4)
          on conflict (type, version) do update set schema = excluded.schema where public.intent_schemas.app_id = excluded.app_id`,

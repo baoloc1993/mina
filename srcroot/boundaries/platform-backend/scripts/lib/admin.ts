@@ -1,4 +1,4 @@
-// promote · revoke · add-tester · set-plan — thao tác quản trị registry trên máy người vận hành.
+// promote · revoke · add-tester · set-plan · set-entitlement — thao tác quản trị registry trên máy người vận hành.
 import type { Client } from "pg";
 import { RegistryError } from "./errors.ts";
 
@@ -39,4 +39,21 @@ export async function setPlan(db: Client, email: string, plan: string): Promise<
     throw new RegistryError("PLAN_NOT_FOUND", `không có gói "${plan}"`);
   }
   await db.query("update public.tenants set plan = $2 where id = $1", [tenant, plan]);
+}
+
+/** `null` (chữ) -> không hết hạn; ngày ISO (`2026-09-01` hoặc `2026-09-01T00:00:00Z`) -> ISO UTC. Sai -> BAD_DATE. */
+export function parseEntitlementUntil(raw: string): string | null {
+  const t = raw.trim();
+  if (t.toLowerCase() === "null") return null;
+  const ok = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(t);
+  const d = ok ? new Date(t.replace(" ", "T")) : new Date(NaN);
+  if (Number.isNaN(d.getTime())) throw new RegistryError("BAD_DATE", `"${raw}" không phải ngày ISO (vd 2026-09-01 hoặc 2026-09-01T00:00:00Z) cũng không phải null`);
+  return d.toISOString();
+}
+
+export async function setEntitlement(db: Client, email: string, raw: string): Promise<string | null> {
+  const until = parseEntitlementUntil(raw);
+  const tenant = await tenantByEmail(db, email);
+  await db.query("update public.tenants set entitlement_until = $2 where id = $1", [tenant, until]);
+  return until;
 }

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { type CatalogRow, publicOrigin, rewriteOrigin, toCatalogApp } from "./catalog_logic.ts";
+import { type CatalogRow, manifestInfo, publicOrigin, rewriteOrigin, toCatalogApp } from "./catalog_logic.ts";
 
 const row = (over: Partial<CatalogRow> = {}): CatalogRow => ({
   id: "vn.app.hello", name: "Hello", table_prefix: "app_hello", owner_tenant_id: null,
@@ -36,4 +36,21 @@ Deno.test("publicOrigin: ghép x-forwarded-host + x-forwarded-port của Kong; t
   assertEquals(publicOrigin(h({ "x-forwarded-host": "abc.supabase.co", "x-forwarded-port": "443", "x-forwarded-proto": "https" }), "http://kong:8000"), "https://abc.supabase.co");
   assertEquals(publicOrigin(h({ "x-forwarded-host": "127.0.0.1:54321" }), "http://kong:8000"), "http://127.0.0.1:54321");
   assertEquals(publicOrigin(h({}), "http://fallback:1"), "http://fallback:1");
+});
+
+Deno.test("position (vòng 3): mặc định null; có thì kèm theo, mọi trường cũ giữ nguyên", () => {
+  assertEquals(toCatalogApp(row(), "http://x/signed").position, null);
+  const a = toCatalogApp(row({ installed: true, enabled: true }), "http://x/signed", 2);
+  assertEquals([a.position, a.package_url, a.table_prefix, a.installed], [2, "http://x/signed", "app_hello", true]);
+  assertEquals(toCatalogApp(row({ version: null, package_path: null }), null, 0).position, 0);
+});
+
+Deno.test("description / scopes / network lấy từ manifest; thiếu → null / []; NO_SAFE_VERSION luôn rỗng", () => {
+  const m = { description: "Xin chào", scopes: ["db", "net", 5], network: ["api.example.com"] };
+  const a = toCatalogApp(row(), "http://x", null, m);
+  assertEquals([a.description, a.scopes, a.network], ["Xin chào", ["db", "net"], ["api.example.com"]]);
+  assertEquals(manifestInfo(null), { description: null, scopes: [], network: [] });
+  assertEquals(manifestInfo({ description: "" }).description, null);
+  const none = toCatalogApp(row({ version: null, package_path: null }), null, null, m);
+  assertEquals([none.description, none.scopes, none.network, none.code], [null, [], [], "NO_SAFE_VERSION"]);
 });

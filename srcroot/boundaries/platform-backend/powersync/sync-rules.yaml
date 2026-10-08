@@ -5,11 +5,17 @@ bucket_definitions:
   installations:
     parameters: select request.jwt() ->> 'tenant_id' as tenant_id
     data:
-      - select * from installations where tenant_id = bucket.tenant_id
+      - select app_id as id, app_id, tenant_id, version, enabled, position, installed_at, updated_at from installations where tenant_id = bucket.tenant_id
   rejections:
     parameters: select request.jwt() ->> 'tenant_id' as tenant_id
     data:
       - select * from sync_rejections where tenant_id = bucket.tenant_id
+  core:
+    parameters: select request.jwt() ->> 'tenant_id' as tenant_id
+    data:
+      - select * from core_contacts where tenant_id = bucket.tenant_id
+      - select * from core_files where tenant_id = bucket.tenant_id
+      - select * from core_tags where tenant_id = bucket.tenant_id
   app_hello:
     parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.hello' and enabled = true
     data:

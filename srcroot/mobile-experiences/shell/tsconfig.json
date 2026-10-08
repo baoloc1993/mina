@@ -2,7 +2,16 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ]
   },
-  "exclude": ["node_modules", "fixtures"]
+  "exclude": [
+    "node_modules",
+    "fixtures",
+    "packages/miniapp-sdk/mock",
+    "packages/miniapp-sdk/test",
+    "packages/miniapp-sdk/scripts"
+  ]
 }

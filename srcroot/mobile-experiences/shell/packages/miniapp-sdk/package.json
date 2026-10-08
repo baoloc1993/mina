@@ -1,0 +1,25 @@
+{
+  "name": "@platform/miniapp-sdk",
+  "version": "0.1.0",
+  "description": "SDK v0 cho mini app: window.miniapp (tiêm vào WebView), design tokens, kiểu TypeScript và mock chạy trên trình duyệt.",
+  "private": true,
+  "types": "./src/index.d.ts",
+  "exports": {
+    "./tokens/tokens.json": "./tokens/tokens.json",
+    "./tokens/tokens.css": "./tokens/tokens.css",
+    "./tokens/tailwind.preset.js": "./tokens/tailwind.preset.js",
+    "./tokens/tokens": {
+      "types": "./tokens/tokens.ts",
+      "default": "./tokens/tokens.ts"
+    },
+    "./tokens/*": "./tokens/*",
+    "./src/injected": {
+      "types": "./src/injected.ts",
+      "default": "./src/injected.ts"
+    },
+    "./types": {
+      "types": "./src/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  }
+}

@@ -1,31 +1,57 @@
-// WebView Host (CAP-RT-01): nạp gói local, inject SDK trước script app, CSP do shell chèn,
-// chặn điều hướng ra ngoài, log thời gian từ lúc bấm mở tới sdk.ready.
-import React, { useEffect, useRef, useState } from 'react';
+// WebView Host (CAP-RT-01, AC-15/AC-14): nạp gói local, inject SDK 0.1.0 + CSP trước script app, chặn điều hướng ra ngoài,
+// chuyển JSON-RPC sang bridge, đẩy sự kiện (suspend/resume/intent/sync) xuống app.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import type { PowerSyncDatabase } from '@powersync/react-native';
-import { handleRpc, tablePrefix, type RpcRequest } from '../bridge/bridge';
-import { getAppToken } from '../auth/supabase';
-import { INJECTED_SDK, injectCsp } from './injectedSdk';
-import { readEntryHtml, type InstalledApp } from './packageManager';
+import * as FS from 'expo-file-system/legacy';
+import { INJECTED_SDK } from '../../packages/miniapp-sdk/src/injected';
+import { injectCsp } from '../../packages/miniapp-sdk/src/csp';
+import { tokens } from '../../packages/miniapp-sdk/tokens/tokens';
+import type { RpcRequest } from '../bridge/types';
+import type { AppRuntimeInfo, RuntimeImpl } from '../runtime/runtime';
 
 interface Props {
-  app: InstalledApp;
-  db: PowerSyncDatabase;
-  tenantId: string | null;
-  onOpenTimeMs(ms: number): void;
+  appId: string;
+  info: AppRuntimeInfo;
+  visible: boolean;
+  runtime: RuntimeImpl;
 }
 
-export function MiniAppHost({ app, db, tenantId, onOpenTimeMs }: Props) {
+export function MiniAppHost({ appId, info, visible, runtime }: Props) {
   const [html, setHtml] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const web = useRef<WebView>(null);
-  const t0 = useRef(Date.now());
 
   useEffect(() => {
-    t0.current = Date.now();
-    readEntryHtml(app).then((h) => setHtml(injectCsp(h)));
-  }, [app]);
+    let alive = true;
+    FS.readAsStringAsync(info.dir + info.row.manifest.entry).then((h) => alive && setHtml(injectCsp(h)));
+    return () => {
+      alive = false;
+    };
+  }, [info.dir, info.row.manifest.entry]);
+
+  useEffect(() => {
+    runtime.registerChannel(appId, {
+      emit: (name, payload) => {
+        const body = JSON.stringify(JSON.stringify(payload ?? {}));
+        web.current?.injectJavaScript(`window.__miniappEvent && window.__miniappEvent(${JSON.stringify(name)}, ${body}); true;`);
+      },
+    });
+    return () => runtime.registerChannel(appId, null);
+  }, [appId, runtime]);
+
+  // Sự kiện sync xuống app (sdk.on('sync')) mỗi khi trạng thái đổi.
+  useEffect(() => {
+    let last = '';
+    return runtime.subscribe(() => {
+      const s = runtime.getState().sync;
+      const key = `${s.state}|${s.pending}|${s.rejected}`;
+      if (key !== last && ready) {
+        last = key;
+        web.current?.injectJavaScript(`window.__miniappEvent && window.__miniappEvent("sync", ${JSON.stringify(JSON.stringify(s))}); true;`);
+      }
+    });
+  }, [runtime, ready]);
 
   async function onMessage(e: WebViewMessageEvent) {
     let req: RpcRequest;
@@ -34,33 +60,20 @@ export function MiniAppHost({ app, db, tenantId, onOpenTimeMs }: Props) {
     } catch {
       return;
     }
-    const res = await handleRpc(req, {
-      manifest: app.manifest,
-      getTenantId: () => tenantId,
-      now: () => new Date().toISOString(),
-      dbGetAll: (sql, params) => db.getAll(sql, params as unknown[]),
-      dbExecute: async (sql, params) => {
-        await db.execute(sql, params as unknown[]);
-      },
-      getAppToken,
-      onReady: () => {
-        const ms = Date.now() - t0.current;
-        console.log(`[miniapp] ${app.manifest.id} ready sau ${ms} ms`);
-        onOpenTimeMs(ms);
-        setReady(true);
-      },
-    });
+    if (req?.method === 'sdk.ready') setReady(true);
+    const res = await info.rpc(req);
     web.current?.injectJavaScript(`window.__miniappResolve(${JSON.stringify(JSON.stringify(res))}); true;`);
   }
 
-  if (!html) return <ActivityIndicator style={styles.fill} />;
+  const style = useMemo(() => (visible ? styles.fill : styles.hidden), [visible]);
+  if (!html) return <View style={style}><ActivityIndicator style={styles.fill} color={tokens.color.primary} /></View>;
   return (
-    <View style={styles.fill}>
+    <View style={style}>
       <WebView
         ref={web}
         style={styles.fill}
         originWhitelist={['file://*', 'about:*']}
-        source={{ html, baseUrl: app.dir }}
+        source={{ html, baseUrl: info.dir }}
         injectedJavaScriptBeforeContentLoaded={INJECTED_SDK}
         onMessage={onMessage}
         javaScriptEnabled
@@ -71,19 +84,20 @@ export function MiniAppHost({ app, db, tenantId, onOpenTimeMs }: Props) {
         setSupportMultipleWindows={false}
         onShouldStartLoadWithRequest={(r) => r.url.startsWith('file://') || r.url.startsWith('about:')}
       />
-      {!ready && (
+      {!ready && visible && (
         <View style={styles.splash} pointerEvents="none">
-          <ActivityIndicator />
-          <Text>{app.manifest.name}</Text>
+          <ActivityIndicator color={tokens.color.primary} />
+          <Text style={styles.splashText}>Đang mở {info.row.name}…</Text>
         </View>
       )}
     </View>
   );
 }
 
+const px = (v: string) => parseInt(v, 10);
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  splash: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  hidden: { display: 'none' },
+  splash: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.bg },
+  splashText: { marginTop: px(tokens.space.sm), color: tokens.color['text-muted'], fontSize: px(tokens.text.base) },
 });
-
-export { tablePrefix };

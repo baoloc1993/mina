@@ -4,6 +4,9 @@ import type { Client } from "pg";
 
 export type AppTables = { id: string; table_prefix: string; tables: string[] };
 
+/** Dữ liệu dùng chung trong tenant (vòng 3): mọi tenant, không theo app đã cài. */
+export const CORE_TABLES = ["core_contacts", "core_files", "core_tags"];
+
 export function renderSyncRules(apps: AppTables[]): string {
   const lines = [
     "# FILE SINH bởi `npm run registry -- gen-sync-rules` từ app_tables × installations — KHÔNG sửa tay (sửa scripts/lib/syncrules.ts).",
@@ -13,12 +16,18 @@ export function renderSyncRules(apps: AppTables[]): string {
     "  installations:",
     "    parameters: select request.jwt() ->> 'tenant_id' as tenant_id",
     "    data:",
-    "      - select * from installations where tenant_id = bucket.tenant_id",
+    "      - select app_id as id, app_id, tenant_id, version, enabled, position, installed_at, updated_at from installations where tenant_id = bucket.tenant_id",
     "  rejections:",
     "    parameters: select request.jwt() ->> 'tenant_id' as tenant_id",
     "    data:",
     "      - select * from sync_rejections where tenant_id = bucket.tenant_id",
   ];
+  lines.push(
+    "  core:",
+    "    parameters: select request.jwt() ->> 'tenant_id' as tenant_id",
+    "    data:",
+    ...CORE_TABLES.map((t) => `      - select * from ${t} where tenant_id = bucket.tenant_id`),
+  );
   for (const app of apps) {
     lines.push(
       `  ${app.table_prefix}:`,
@@ -34,6 +43,7 @@ export async function loadApps(db: Client): Promise<AppTables[]> {
   const r = await db.query(
     `select a.id, a.table_prefix, array_agg(t.table_name order by t.table_name) as tables
        from public.apps a join public.app_tables t on t.app_id = a.id
+      where a.id <> '_core'
       group by a.id, a.table_prefix order by a.id`,
   );
   return r.rows;

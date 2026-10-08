@@ -3,8 +3,10 @@
   python deployment/local/seed/seed.py          # user + khoá ký thử + publish hello / private-a + cài + sync rules + 20 mục hello mỗi tenant
   python deployment/local/seed/seed.py --clean  # xoá mục + 2 user thử (cascade installations/devices); registry giữ nguyên
 
-Registry sau seed: hello 0.0.1 (published, công khai, cài cho cả 2 tenant) · vn.app.private-a 0.0.1 (published, riêng của
-tenant-a, cài cho tenant-a). Khoá lấy từ `supabase status` (không đọc .env, không in ra). Chạy sau `make dev`.
+Registry sau seed (vòng 3): hello (bản trong fixtures/miniapp-hello, published, cài cho cả 2 tenant) · hello-cal 0.1.0 (published,
+KHÔNG cài sẵn — cài từ launcher) · vn.app.private-a 0.0.1 (riêng của tenant-a, cài cho tenant-a) · hello 0.3.0 DRAFT có migration
+cố ý lỗi trên SQLite (fixtures/miniapp-hello-bad-migration, tenant-a là tester) · vài core_tags cho tenant-a. Chạy lại an toàn:
+bản đã có thì bỏ qua. Khoá lấy từ `supabase status` (không đọc .env, không in ra). Chạy sau `make dev`.
 """
 import json
 import os
@@ -17,8 +19,11 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 BACKEND = os.path.join(ROOT, "srcroot", "boundaries", "platform-backend")
 HELLO_FIXTURE = os.path.join(ROOT, "srcroot", "mobile-experiences", "shell", "fixtures", "miniapp-hello")
+FIXTURES = os.path.join(ROOT, "srcroot", "mobile-experiences", "shell", "fixtures")
+HELLO_CAL_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-cal")
+HELLO_BAD_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-bad-migration")
 PRIVATE_A = os.path.join(BACKEND, "fixtures", "private-a")
-STAGE = os.path.join(ROOT, "deployment", "local", ".build", "hello")
+BUILD = os.path.join(ROOT, "deployment", "local", ".build")
 SYNC_RULES = os.path.join(BACKEND, "powersync", "sync-rules.yaml")
 DB_CONTAINER = "supabase_db_platform-backend"
 USERS = ["a@test.local", "b@test.local"]
@@ -92,23 +97,57 @@ def has_version(app: str, version: str) -> bool:
     return bool(sql(f"select 1 from app_versions where app_id = '{app}' and version = '{version}'"))
 
 
-def stage_hello() -> str:
-    """Hello chưa có thư mục đóng gói (build.js chỉ ghi zip vào assets của shell) → dựng thư mục tạm, không sửa shell."""
-    shutil.rmtree(STAGE, ignore_errors=True)
-    os.makedirs(STAGE)
-    shutil.copy(os.path.join(HELLO_FIXTURE, "manifest.json"), STAGE)
-    shutil.copy(os.path.join(HELLO_FIXTURE, "src", "index.html"), STAGE)
-    return STAGE
+def stage_fixture(name: str, fixture: str) -> str | None:
+    """Dựng thư mục publish từ fixture của shell. Fixture có `src/` (entry nằm trong src) thì entry + file trong src/ được
+    đưa lên gốc cạnh manifest.json; `migrations/` đi kèm (gói zip chứa migrations từ vòng 3). Thiếu fixture → None."""
+    if not os.path.isfile(os.path.join(fixture, "manifest.json")):
+        return None
+    stage = os.path.join(BUILD, name)
+    shutil.rmtree(stage, ignore_errors=True)
+    os.makedirs(stage)
+    skip = shutil.ignore_patterns("node_modules", "dist", "build.js", ".*")
+    src = os.path.join(fixture, "src")
+    if os.path.isdir(src):
+        shutil.copytree(src, stage, dirs_exist_ok=True, ignore=skip)
+        shutil.copy(os.path.join(fixture, "manifest.json"), stage)
+        if os.path.isdir(os.path.join(fixture, "migrations")):
+            shutil.copytree(os.path.join(fixture, "migrations"), os.path.join(stage, "migrations"))
+    else:
+        shutil.copytree(fixture, stage, dirs_exist_ok=True, ignore=skip)
+    return stage
 
 
-def publish_fixture(app: str, version: str, directory: str, owner: str | None = None) -> None:
+def manifest_of(directory: str) -> dict:
+    with open(os.path.join(directory, "manifest.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def publish_fixture(directory: str | None, label: str, owner: str | None = None, promote: bool = True) -> dict | None:
+    """Publish (+ promote) bản trong `directory` nếu registry chưa có version đó. Trả manifest, hoặc None khi thiếu fixture."""
+    if directory is None:
+        print(f"  CHƯA CHẠY THỬ {label}: thiếu thư mục fixture (shell chưa tạo) — bỏ qua")
+        return None
+    m = manifest_of(directory)
+    app, version = m["id"], m["version"]
     if has_version(app, version):
         print(f"  {app}@{version} đã có trong registry")
-        return
+        return m
+    if sql(f"select 1 from app_versions where app_id = '{app}' and string_to_array(version, '.')::int[] > string_to_array('{version}', '.')::int[] limit 1"):
+        print(f"  {app}@{version}: registry đã có version cao hơn — bỏ qua")
+        return None
     args = ["publish", directory] + (["--owner", owner] if owner else [])
     print("  " + registry(*args).splitlines()[0])
-    registry("promote", app, version)
-    print(f"  promote {app}@{version} → published")
+    if promote:
+        registry("promote", app, version)
+        print(f"  promote {app}@{version} → published")
+    return m
+
+
+CORE_TAGS = [
+    ("00000000-0000-4000-8000-0000000000c1", "việc nhà", "#E57373"),
+    ("00000000-0000-4000-8000-0000000000c2", "công việc", "#64B5F6"),
+    ("00000000-0000-4000-8000-0000000000c3", "gia đình", "#81C784"),
+]
 
 
 def seed() -> None:
@@ -117,8 +156,9 @@ def seed() -> None:
         admin_create(env, e)
 
     print(registry("keygen"))
-    publish_fixture("vn.app.hello", "0.0.1", stage_hello())
-    publish_fixture("vn.app.private-a", "0.0.1", PRIVATE_A, owner=USERS[0])
+    publish_fixture(stage_fixture("hello", HELLO_FIXTURE), "hello (fixtures/miniapp-hello)")
+    publish_fixture(stage_fixture("hello-cal", HELLO_CAL_FIXTURE), "hello-cal 0.1.0 (fixtures/miniapp-hello-cal)")
+    publish_fixture(PRIVATE_A, "private-a", owner=USERS[0])
 
     tenants = {}
     for i, e in enumerate(USERS):
@@ -127,10 +167,32 @@ def seed() -> None:
             sys.exit(f"không thấy tenant của {e}")
         tenants[e] = tid
 
+    def ensure_installed(tid: str, app: str) -> None:
+        # Đã cài + bật thì giữ nguyên (không đè cột version bằng bản draft của tester).
+        if not sql(f"select 1 from installations where tenant_id = '{tid}' and app_id = '{app}' and enabled"):
+            sql(f"select public._install_app('{tid}', '{app}')")
+
     for e, tid in tenants.items():
-        sql(f"select public._install_app('{tid}', 'vn.app.hello')")
-    sql(f"select public._install_app('{tenants[USERS[0]]}', 'vn.app.private-a')")
-    print("  cài vn.app.hello cho cả 2 tenant, vn.app.private-a cho tenant-a")
+        ensure_installed(tid, "vn.app.hello")
+    ensure_installed(tenants[USERS[0]], "vn.app.private-a")
+    print("  cài vn.app.hello cho cả 2 tenant, vn.app.private-a cho tenant-a (hello-cal chưa cài — cài từ launcher)")
+
+    # hello 0.3.0 DRAFT migration lỗi (test rollback AC-3): chỉ tenant-a thấy. Publish SAU hello 0.2.0 (version phải tăng).
+    # Chưa có hello >= 0.2.0 thì KHÔNG publish 0.3.0 (sẽ chặn publish 0.2.0 về sau vì version phải tăng) — chạy lại seed sau.
+    hello_ok = sql("select 1 from app_versions where app_id = 'vn.app.hello' and string_to_array(version, '.')::int[] >= array[0,2,0] limit 1")
+    bad = None
+    if hello_ok:
+        bad = publish_fixture(stage_fixture("hello-bad", HELLO_BAD_FIXTURE), "hello 0.3.0 draft (fixtures/miniapp-hello-bad-migration)", promote=False)
+    else:
+        print("  CHƯA CHẠY THỬ hello 0.3.0 draft: registry chưa có hello >= 0.2.0 (fixture miniapp-hello chưa nâng) — chạy lại seed sau")
+    if bad:
+        registry("add-tester", bad["id"], bad["version"], USERS[0])
+        print(f"  {bad['id']}@{bad['version']} draft — tenant-a là tester")
+
+    ta = tenants[USERS[0]]
+    for tag_id, name, color in CORE_TAGS:
+        sql(f"insert into core_tags (id, tenant_id, name, color) values ('{tag_id}', '{ta}', '{name}', '{color}') on conflict (id) do nothing")
+    print(f"  tenant a: {len(CORE_TAGS)} core_tags mẫu")
 
     before = open(SYNC_RULES, encoding="utf-8").read() if os.path.exists(SYNC_RULES) else ""
     print("  " + registry("gen-sync-rules").splitlines()[0])

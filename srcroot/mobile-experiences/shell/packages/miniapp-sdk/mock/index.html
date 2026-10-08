@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock SDK · Mina</title>
+</head>
+<body>
+<main class="console" id="S10" data-screen="S10">
+  <div class="top">
+    <b id="title">Mock SDK</b>
+    <label class="field-inline">Mini app
+      <select class="input" id="fixture" aria-label="Chọn fixture"></select>
+    </label>
+    <button class="btn ghost" id="open-tab" title="Mở fixture đang chọn ở tab mới để thử intent giữa hai app">Mở ở tab mới</button>
+    <label class="field-inline">Mạng
+      <select class="input" id="net" aria-label="Trạng thái sync giả">
+        <option value="online">online</option>
+        <option value="offline">offline</option>
+        <option value="ro">chỉ đọc</option>
+      </select>
+    </label>
+    <button class="btn sec" id="matrix">Chạy ma trận scope</button>
+    <button class="btn ghost" id="clear">Xoá log</button>
+    <button class="btn ghost" id="reset-db">Đặt lại DB</button>
+  </div>
+  <details class="scopes" id="scopes-box">
+    <summary id="scopes-summary">Manifest · scope</summary>
+    <div class="scope-grid" id="scopes"></div>
+    <div class="muted" id="manifest-info"></div>
+  </details>
+  <div class="cols">
+    <div class="left">
+      <div class="frame" id="frame">
+        <iframe id="app" title="Mini app" sandbox="allow-scripts"></iframe>
+        <div class="splash" id="splash"><div class="splash-icon" id="splash-icon"></div><div>Đang mở…</div></div>
+        <div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button class="btn" id="toast-open" hidden>Mở</button></div>
+      </div>
+      <div class="row">
+        <button class="btn sec" id="ev-suspend">Suspend</button>
+        <button class="btn sec" id="ev-resume">Resume</button>
+        <button class="btn sec" id="ev-reload">Tải lại app</button>
+      </div>
+    </div>
+    <div class="right">
+      <div class="muted head">Thời gian · method · scope cần · kết quả</div>
+      <div class="log" id="log" aria-live="polite"></div>
+      <div id="matrix-out"></div>
+    </div>
+  </div>
+</main>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>

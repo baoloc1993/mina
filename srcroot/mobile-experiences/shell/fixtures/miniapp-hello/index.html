@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hello</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* Mọi màu / cỡ chữ / khoảng cách lấy từ tokens.css (design system chung của shell và mini app). */
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0 var(--space-md) var(--space-xl); font-family: var(--font-sans); font-size: var(--text-base); background: var(--color-bg); color: var(--color-text); }
+  h1 { font-size: var(--text-xl); margin: var(--space-md) 0 var(--space-sm); }
+  h2 { font-size: var(--text-lg); margin: var(--space-lg) 0 var(--space-sm); }
+  .muted { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: var(--text-sm); font-weight: 600; background: var(--color-surface); }
+  .chip.online { color: var(--color-success); }
+  .chip.offline { color: var(--color-warning); }
+  .chip.error { color: var(--color-danger); }
+  .chip.syncing { color: var(--color-primary); }
+  .banner { display: none; margin: var(--space-sm) 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-warning); font-weight: 600; }
+  .banner.show { display: block; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+
+  #bar { position: sticky; top: 0; z-index: 2; background: var(--color-bg); padding: var(--space-sm) 0; }
+  .row { display: flex; gap: var(--space-sm); }
+  input, textarea { flex: 1; min-width: 0; min-height: var(--tap-min); padding: 0 var(--space-md); font: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+  textarea { padding: var(--space-sm) var(--space-md); min-height: 96px; width: 100%; }
+  button { min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 var(--space-md); font: inherit; font-weight: 600; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-primary); cursor: pointer; }
+  button.primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+  button.danger { color: var(--color-danger); }
+  button.danger.armed { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-on-primary); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+  #toast { min-height: 24px; margin-top: var(--space-xs); font-size: var(--text-sm); color: var(--color-text-muted); }
+
+  ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+  li { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); min-height: 56px; background: var(--color-surface); border-radius: var(--radius-md); }
+  li span.t { flex: 1; word-break: break-word; }
+  li.done span.t { text-decoration: line-through; color: var(--color-text-muted); }
+  #empty { color: var(--color-text-muted); padding: var(--space-md) 0; }
+
+  .group { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+  details { margin-top: var(--space-lg); }
+  summary { min-height: var(--tap-min); display: flex; align-items: center; font-weight: 600; font-size: var(--text-lg); cursor: pointer; }
+  #log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-sm); white-space: pre-wrap; background: var(--color-surface); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); min-height: var(--tap-min); max-height: 280px; overflow: auto; }
+  #photo { max-width: 100%; max-height: 160px; border-radius: var(--radius-md); margin-top: var(--space-sm); display: none; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>Hello</h1>
+  <span id="sync" class="chip">…</span>
+</div>
+<div id="ro" class="banner" role="status">Đang ở chế độ chỉ đọc — cần mạng để xác minh lại. Ghi sẽ bị từ chối (READ_ONLY).</div>
+
+<div id="bar">
+  <div class="row">
+    <input id="title" placeholder="Thêm mục mới" autocomplete="off" enterkeyhint="send" aria-label="Mục mới">
+    <button id="add" class="primary">Thêm</button>
+  </div>
+  <div id="toast" aria-live="polite"></div>
+</div>
+
+<p id="empty" hidden>Chưa có mục nào</p>
+<ul id="list"></ul>
+
+<h2>Nháp</h2>
+<textarea id="draft" placeholder="Gõ dở rồi chuyển app khác — nháp được lưu khi app bị tạm dừng" aria-label="Nháp"></textarea>
+<div class="muted" id="draft-state">Chưa lưu</div>
+
+<h2>Intent</h2>
+<div class="group">
+  <button id="i-remind">Tạo nhắc</button>
+  <button id="i-open">Mở lịch</button>
+  <button id="i-bad">Payload sai</button>
+  <button id="i-unknown">Intent không khai</button>
+</div>
+
+<h2>Tag dùng chung</h2>
+<div class="group">
+  <button id="t-create">Tạo tag việc nhà</button>
+  <button id="t-noscope">Tạo tag không scope</button>
+</div>
+
+<h2>Mạng</h2>
+<div class="group">
+  <button id="n-ok">Gọi vnexpress.net</button>
+  <button id="n-bad">Gọi domain lạ</button>
+</div>
+
+<h2>Native</h2>
+<div class="group">
+  <button id="u-photo">Chọn ảnh</button>
+  <button id="u-share">Chia sẻ</button>
+  <button id="u-toast">Toast</button>
+</div>
+<img id="photo" alt="Ảnh vừa chọn">
+
+<details>
+  <summary>Ca phá bridge</summary>
+  <div class="group">
+    <button data-case="a">(a) bảng không khai</button>
+    <button data-case="b">(b) SQL hỏng</button>
+    <button data-case="c1">(c) ATTACH</button>
+    <button data-case="c2">(c) PRAGMA</button>
+    <button data-case="c3">(c) DROP</button>
+    <button data-case="d">(d) notify.*</button>
+    <button data-case="e">(e) fetch</button>
+    <button data-case="ok">SQL hợp lệ</button>
+    <button data-case="token">getAppToken</button>
+  </div>
+</details>
+
+<h2>Nhật ký</h2>
+<div id="log" aria-live="polite"></div>
+
+<script>
+(function () {
+  var m = window.miniapp;
+  var $ = function (id) { return document.getElementById(id); };
+  var listEl = $('list'), emptyEl = $('empty'), logEl = $('log'), titleEl = $('title'), toastEl = $('toast');
+  var toastTimer = null;
+  var DRAFT_ID = 'main';
+
+  function log(msg) { logEl.textContent = msg + '\n' + logEl.textContent.slice(0, 3000); }
+  function toast(msg) {
+    toastEl.textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.textContent = ''; }, 3000);
+  }
+  function uuid() { return crypto.randomUUID(); }
+  function fmt(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+
+  // Khuôn log thống nhất: "[ca] bị chặn: MÃ — mô tả" / "[ca] chạy được: …"
+  function show(name, p) {
+    return p.then(function (r) { log('[' + name + '] chạy được: ' + fmt(r)); return r; })
+      .catch(function (e) {
+        var code = e.code || (e.name === 'TypeError' ? 'CSP_BLOCKED' : e.name);
+        log('[' + name + '] bị chặn: ' + code + ' — ' + e.message + (e.detail ? ' (' + e.detail + ')' : ''));
+        if (code === 'READ_ONLY') $('ro').classList.add('show');
+      });
+  }
+
+  // ---------- danh sách ----------
+  var armed = null; // nút Xoá đang chờ bấm lần hai
+  function disarm() { if (armed) { armed.btn.textContent = 'Xoá'; armed.btn.classList.remove('armed'); clearTimeout(armed.t); armed = null; } }
+
+  function render(rows) {
+    disarm();
+    listEl.innerHTML = '';
+    emptyEl.hidden = rows.length > 0;
+    rows.forEach(function (r) {
+      var li = document.createElement('li');
+      if (r.done) li.className = 'done';
+      var span = document.createElement('span'); span.className = 't'; span.textContent = r.title;
+      var tog = document.createElement('button'); tog.textContent = r.done ? 'Bỏ xong' : 'Xong';
+      tog.onclick = function () {
+        show('xong', m.db.execute('UPDATE items SET done = ? WHERE id = ?', [r.done ? 0 : 1, r.id])).then(refresh);
+      };
+      var del = document.createElement('button'); del.textContent = 'Xoá'; del.className = 'danger';
+      // Xoá phải bấm hai lần (không có hoàn tác): lần đầu chỉ "lên đạn" trong 3 giây
+      del.onclick = function () {
+        if (armed && armed.btn === del) {
+          disarm();
+          show('xoá', m.db.execute('DELETE FROM items WHERE id = ?', [r.id])).then(function () { toast('Đã xoá "' + r.title + '"'); return refresh(); });
+          return;
+        }
+        disarm();
+        del.textContent = 'Chắc không?'; del.classList.add('armed');
+        armed = { btn: del, t: setTimeout(disarm, 3000) };
+      };
+      li.appendChild(span); li.appendChild(tog); li.appendChild(del);
+      listEl.appendChild(li);
+    });
+  }
+
+  function refresh() {
+    // Mới nhất lên đầu; id làm khoá phụ để thứ tự ổn định khi trùng thời điểm tạo
+    return m.db.query('SELECT id, title, done FROM items ORDER BY created_at DESC, id', [])
+      .then(function (rows) { if (armed) return; render(rows); }) // đang chờ xác nhận Xoá: đừng vẽ lại làm mất nút
+      .catch(function (e) { log('[query] lỗi: ' + e.code + ' — ' + e.message); });
+  }
+
+  function addItem() {
+    var t = titleEl.value.trim();
+    if (!t) return;
+    var t0 = performance.now();
+    show('thêm', m.db.execute('INSERT INTO items (id, title, done) VALUES (?, ?, ?)', [uuid(), t, 0]))
+      .then(refresh)
+      .then(function () { toast('Đã thêm "' + t + '"'); log('[thêm] xong sau ' + Math.round(performance.now() - t0) + ' ms'); window.scrollTo(0, 0); });
+    titleEl.value = '';
+  }
+  $('add').onclick = addItem;
+  titleEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
+
+  // ---------- nháp (AC-14): lưu khi bị tạm dừng, khôi phục khi nạp lại ----------
+  var draftEl = $('draft');
+  function saveDraft() {
+    var v = draftEl.value;
+    return m.db.query('SELECT id FROM drafts WHERE id = ?', [DRAFT_ID]).then(function (rows) {
+      return rows.length
+        ? m.db.execute('UPDATE drafts SET value = ? WHERE id = ?', [v, DRAFT_ID])
+        : m.db.execute('INSERT INTO drafts (id, value) VALUES (?, ?)', [DRAFT_ID, v]);
+    }).then(function () { $('draft-state').textContent = 'Đã lưu nháp (' + v.length + ' ký tự)'; log('[nháp] đã lưu khi suspend'); })
+      .catch(function (e) { log('[nháp] không lưu được: ' + e.code + ' — ' + e.message); });
+  }
+  function restoreDraft() {
+    return m.db.query('SELECT value FROM drafts WHERE id = ?', [DRAFT_ID]).then(function (rows) {
+      if (rows.length && rows[0].value) {
+        draftEl.value = rows[0].value;
+        $('draft-state').textContent = 'Đã khôi phục nháp';
+        log('[nháp] khôi phục ' + rows[0].value.length + ' ký tự');
+      }
+    }).catch(function (e) { log('[nháp] không đọc được: ' + e.code + ' — ' + e.message); });
+  }
+  m.sdk.on('suspend', saveDraft);
+  m.sdk.on('resume', function () { log('[resume] app được đánh thức'); refresh(); });
+
+  // ---------- intent ----------
+  $('i-remind').onclick = function () {
+    var t = titleEl.value.trim() || 'Nhắc từ Hello';
+    show('tạo nhắc', m.intent.send('cal.reminder.create', { title: t, at: Date.now() + 60000 }, { mode: 'create' }));
+  };
+  $('i-open').onclick = function () { show('mở lịch', m.intent.send('cal.event.open', { title: 'Từ Hello' }, { mode: 'open' })); };
+  $('i-bad').onclick = function () { show('payload sai', m.intent.send('cal.reminder.create', { title: 123 }, { mode: 'create' })); };
+  $('i-unknown').onclick = function () { show('intent không khai', m.intent.send('cal.khong.khai', { a: 1 }, { mode: 'create' })); };
+
+  // ---------- tag ----------
+  $('t-create').onclick = function () { show('tạo tag', m.core.tags.create({ name: 'việc nhà' })); };
+  // App này KHÔNG khai core.contacts:* — gọi thử để thấy SCOPE_DENIED thật
+  $('t-noscope').onclick = function () { show('tag không scope', m.core.contacts.create({ name: 'An' })); };
+
+  // ---------- mạng ----------
+  $('n-ok').onclick = function () {
+    show('vnexpress.net', m.net.fetch('https://vnexpress.net/').then(function (r) { return { status: r.status, bytes: r.body.length }; }));
+  };
+  $('n-bad').onclick = function () { show('domain lạ', m.net.fetch('https://example.org/')); };
+
+  // ---------- native ----------
+  $('u-photo').onclick = function () {
+    show('chọn ảnh', m.ui.pickImage()).then(function (r) {
+      if (r && r.files && r.files[0]) { var img = $('photo'); img.src = r.files[0].uri; img.style.display = 'block'; }
+    });
+  };
+  $('u-share').onclick = function () { show('chia sẻ', m.ui.share({ title: 'Hello', text: 'Thử chia sẻ từ mini app' })); };
+  $('u-toast').onclick = function () { show('toast', m.ui.toast('Xin chào từ Hello')); };
+
+  // ---------- đồng bộ + thông tin ----------
+  var LABEL = { online: 'Đã đồng bộ', syncing: 'Đang đồng bộ', offline: 'Offline', error: 'Lỗi đồng bộ' };
+  function showSync(s) {
+    var el = $('sync');
+    el.className = 'chip ' + s.state;
+    el.textContent = LABEL[s.state] + (s.pending ? ' · ' + s.pending + ' chờ gửi' : '') + (s.rejected ? ' · ' + s.rejected + ' bị từ chối' : '');
+  }
+  function refreshInfo() {
+    return m.sdk.info().then(function (i) { $('ro').classList.toggle('show', !!i.readOnly); return i; });
+  }
+  m.sdk.on('sync', function (s) { showSync(s); refreshInfo(); log('[sync] ' + fmt(s)); });
+
+  // ---------- ca phá bridge ----------
+  function expectReject(name, p) {
+    p.then(function () { log('[' + name + '] KHÔNG BỊ CHẶN — LỖI!'); })
+     .catch(function (e) {
+       var code = e.code || (e.name === 'TypeError' ? 'CSP_BLOCKED' : e.name);
+       var desc = e.code ? e.message : 'shell chặn mọi kết nối mạng trực tiếp từ mini app (CSP connect-src none)';
+       log('[' + name + '] bị chặn: ' + code + ' — ' + desc);
+     });
+  }
+  var cases = {
+    a: function () { expectReject('a', m.db.query('SELECT * FROM secrets', [])); },
+    b: function () { expectReject('b', m.db.execute('SELEC * FRM items', [])); },
+    c1: function () { expectReject('c-attach', m.db.execute("ATTACH DATABASE 'x.db' AS x", [])); },
+    c2: function () { expectReject('c-pragma', m.db.execute('PRAGMA key = 1', [])); },
+    c3: function () { expectReject('c-drop', m.db.execute('DROP TABLE items', [])); },
+    d: function () { expectReject('d', m.notify.schedule({ id: 'x', at: Date.now() + 1000, title: 'x' })); },
+    e: function () { expectReject('e', fetch('http://10.0.2.2:54321/rest/v1/')); },
+    ok: function () { show('sql hợp lệ', m.db.query('SELECT COUNT(*) AS n FROM items', [])); },
+    token: function () { show('token', m.auth.getAppToken().then(function (t) { return { token: t.token.slice(0, 20) + '…', expires_at: t.expires_at }; })); }
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-case]'), function (b) {
+    b.onclick = cases[b.getAttribute('data-case')];
+  });
+
+  // ---------- khởi động ----------
+  Promise.all([refresh(), restoreDraft(), m.sync.status().then(showSync), refreshInfo()])
+    .then(function () { return m.sdk.ready(); });
+  setInterval(refresh, 1500); // thấy thay đổi từ máy khác sau khi sync
+})();
+</script>
+</body>
+</html>

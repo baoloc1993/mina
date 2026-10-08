@@ -11,6 +11,8 @@ export interface GuardContext {
   prefix: string; // vd "app_hello_"
   tenantId: string;
   now: string; // ISO
+  /** SELECT mặc định tự lọc dòng đã xoá mềm; {includeDeleted: true} tắt bộ lọc (DECISIONS 2026-10-08). */
+  includeDeleted?: boolean;
 }
 export interface Guarded {
   sql: string;
@@ -24,6 +26,15 @@ const FORBIDDEN = new Set([
   'load_extension', 'union', 'with', 'returning', 'on', 'conflict', 'sqlite_master', 'sqlite_schema',
 ]);
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const CLAUSE_START = new Set(['where', 'group', 'order', 'limit', 'offset', 'having']);
+const NOT_ALIAS = new Set([...CLAUSE_START, 'join', 'natural', 'cross', 'left', 'right', 'inner', 'outer', 'full', 'union', 'intersect', 'except', 'on', 'using', 'window', 'indexed', 'not']);
+
+/** `WHERE …` gốc (token đầu là WHERE, có thể rỗng) → điều kiện thêm `deleted_at IS NULL` — UPDATE/DELETE không chạm dòng đã xoá. */
+function liveWhere(whereTokens: string[]): string {
+  if (whereTokens.some((t) => t.toLowerCase() === 'order' || t.toLowerCase() === 'limit')) reject('ORDER/LIMIT không dùng trong UPDATE/DELETE');
+  if (!whereTokens.length) return ' WHERE deleted_at IS NULL';
+  return ` WHERE deleted_at IS NULL AND ( ${join(whereTokens.slice(1))} )`;
+}
 
 function reject(why: string): never {
   throw new SqlRejected(why);
@@ -140,8 +151,28 @@ export function guardSql(rawSql: string, rawParams: unknown[], ctx: GuardContext
       if (lower === 'from') {
         if (seenFrom) reject('nhiều FROM');
         seenFrom = true;
-        out.push(t, mapTable(tokens[i + 1] ?? '', ctx));
+        const short = tokens[i + 1] ?? '';
+        const physical = mapTable(short, ctx);
         i++;
+        // Bí danh: `FROM items AS i` / `FROM items i`; không có thì dùng chính tên ngắn (để `items.title` còn chạy).
+        let alias = short;
+        const nxt = tokens[i + 1];
+        if (nxt && nxt.toLowerCase() === 'as') {
+          alias = tokens[i + 2] ?? '';
+          if (!IDENT.test(alias)) reject('bí danh không hợp lệ');
+          i += 2;
+        } else if (nxt && IDENT.test(nxt) && !NOT_ALIAS.has(nxt.toLowerCase())) {
+          alias = nxt;
+          i++;
+        }
+        // Sau bảng (+ bí danh) chỉ được là hết câu hoặc một mệnh đề — mọi thứ khác (',' JOIN NATURAL …) là nối bảng.
+        const after = tokens[i + 1];
+        if (after !== undefined && !CLAUSE_START.has(after.toLowerCase())) reject('FROM chỉ nhận một bảng');
+        out.push(t,
+          ctx.includeDeleted
+            ? `${physical} AS ${alias}`
+            : `(SELECT * FROM ${physical} WHERE deleted_at IS NULL) AS ${alias}`,
+        );
         continue;
       }
       out.push(t);
@@ -213,7 +244,7 @@ export function guardSql(rawSql: string, rawParams: unknown[], ctx: GuardContext
     keep.push(`updated_at = ${lit(ctx.now)}`);
     const whereParams = params.slice(pIdx);
     return {
-      sql: `UPDATE ${table} SET ${keep.join(', ')}${whereTokens.length ? ' ' + join(whereTokens) : ''}`,
+      sql: `UPDATE ${table} SET ${keep.join(', ')}${liveWhere(whereTokens)}`,
       params: [...keepParams, ...whereParams],
       kind: 'update',
     };
@@ -226,9 +257,7 @@ export function guardSql(rawSql: string, rawParams: unknown[], ctx: GuardContext
     const rest = tokens.slice(3);
     if (rest.length && rest[0].toLowerCase() !== 'where') reject('DELETE chỉ nhận WHERE');
     return {
-      sql: `UPDATE ${table} SET deleted_at = ${lit(ctx.now)}, updated_at = ${lit(ctx.now)}${
-        rest.length ? ' ' + join(rest) : ''
-      }`,
+      sql: `UPDATE ${table} SET deleted_at = ${lit(ctx.now)}, updated_at = ${lit(ctx.now)}${liveWhere(rest)}`,
       params,
       kind: 'delete',
     };

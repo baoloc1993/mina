@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hello Lịch</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* Mọi màu / cỡ chữ / khoảng cách lấy từ tokens.css (design system chung của shell và mini app). */
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0 var(--space-md) var(--space-xl); font-family: var(--font-sans); font-size: var(--text-base); background: var(--color-bg); color: var(--color-text); }
+  h1 { font-size: var(--text-xl); margin: var(--space-md) 0 var(--space-sm); }
+  h2 { font-size: var(--text-lg); margin: var(--space-lg) 0 var(--space-sm); }
+  .muted { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+  .chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: var(--text-sm); font-weight: 600; background: var(--color-surface); }
+  .chip.online { color: var(--color-success); }
+  .chip.offline { color: var(--color-warning); }
+  .chip.error { color: var(--color-danger); }
+  .chip.syncing { color: var(--color-primary); }
+  .banner { display: none; margin: var(--space-sm) 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-warning); font-weight: 600; }
+  .banner.show { display: block; }
+  #toast { min-height: 24px; font-size: var(--text-sm); color: var(--color-text-muted); }
+
+  button { min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 var(--space-md); font: inherit; font-weight: 600; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-primary); cursor: pointer; }
+  button:focus-visible, summary:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+  .group { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+
+  ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+  li { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); min-height: 56px; background: var(--color-surface); border-radius: var(--radius-md); }
+  li .body { flex: 1; min-width: 0; }
+  li .t { word-break: break-word; }
+  li img { width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius-md); }
+  .empty { color: var(--color-text-muted); padding: var(--space-md) 0; }
+  .tag { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin: 0 var(--space-xs) var(--space-xs) 0; font-size: var(--text-sm); }
+
+  #detail { display: none; padding: var(--space-md); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow); margin-top: var(--space-md); }
+  #detail.show { display: block; }
+  #detail h2 { margin-top: 0; }
+  #log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-sm); white-space: pre-wrap; background: var(--color-surface); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); min-height: var(--tap-min); max-height: 280px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>Hello Lịch</h1>
+  <span id="sync" class="chip">…</span>
+</div>
+<div id="ro" class="banner" role="status">Đang ở chế độ chỉ đọc — cần mạng để xác minh lại. Ghi sẽ bị từ chối (READ_ONLY).</div>
+<div id="toast" aria-live="polite"></div>
+
+<section id="detail" aria-live="polite">
+  <h2>Chi tiết sự kiện</h2>
+  <div id="detail-body"></div>
+  <button id="detail-close">Đóng</button>
+</section>
+
+<h2>Nhắc đã nhận</h2>
+<p class="empty" id="empty" hidden>Chưa có nhắc nào — gửi từ app Hello (nút "Tạo nhắc").</p>
+<ul id="list"></ul>
+
+<h2>Tag dùng chung (đọc)</h2>
+<div id="tags" class="muted">…</div>
+
+<h2>Thao tác</h2>
+<div class="group">
+  <button id="photo">Chọn ảnh</button>
+  <button id="n-ok">Gọi example.com</button>
+  <button id="n-bad">Gọi domain lạ</button>
+  <button id="share">Chia sẻ</button>
+</div>
+
+<h2>Nhật ký</h2>
+<div id="log" aria-live="polite"></div>
+
+<script>
+(function () {
+  var m = window.miniapp;
+  var $ = function (id) { return document.getElementById(id); };
+  var toastTimer = null;
+  var thumbs = {}; // file_id → uri
+
+  function log(msg) { var l = $('log'); l.textContent = msg + '\n' + l.textContent.slice(0, 3000); }
+  function toast(msg) {
+    $('toast').textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { $('toast').textContent = ''; }, 4000);
+  }
+  function fmt(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+  function when(ms) { return ms ? new Date(ms).toLocaleString('vi-VN') : 'chưa đặt giờ'; }
+  function show(name, p) {
+    return p.then(function (r) { log('[' + name + '] chạy được: ' + fmt(r)); return r; })
+      .catch(function (e) {
+        log('[' + name + '] bị chặn: ' + (e.code || e.name) + ' — ' + e.message + (e.detail ? ' (' + e.detail + ')' : ''));
+        if (e.code === 'READ_ONLY') $('ro').classList.add('show');
+      });
+  }
+
+  // ---------- danh sách nhắc ----------
+  function render(rows) {
+    var ul = $('list');
+    ul.innerHTML = '';
+    $('empty').hidden = rows.length > 0;
+    rows.forEach(function (r) {
+      var li = document.createElement('li');
+      if (r.file_id && thumbs[r.file_id]) { var img = document.createElement('img'); img.src = thumbs[r.file_id]; img.alt = 'Ảnh đính kèm'; li.appendChild(img); }
+      var body = document.createElement('div'); body.className = 'body';
+      var t = document.createElement('div'); t.className = 't'; t.textContent = r.title;
+      var w = document.createElement('div'); w.className = 'muted'; w.textContent = when(r.at);
+      body.appendChild(t); body.appendChild(w);
+      li.appendChild(body);
+      ul.appendChild(li);
+    });
+  }
+  function loadThumbs(rows) {
+    var need = rows.filter(function (r) { return r.file_id && !thumbs[r.file_id]; });
+    return Promise.all(need.map(function (r) {
+      return m.storage.get(r.file_id).then(function (f) { thumbs[r.file_id] = f.uri; }).catch(function () {});
+    }));
+  }
+  function refresh() {
+    return m.db.query('SELECT id, title, at, file_id FROM reminders ORDER BY at, id', [])
+      .then(function (rows) { return loadThumbs(rows).then(function () { render(rows); return rows; }); })
+      .catch(function (e) { log('[query] lỗi: ' + e.code + ' — ' + e.message); return []; });
+  }
+
+  // ---------- tag (chỉ đọc) ----------
+  function refreshTags() {
+    return m.core.tags.list().then(function (tags) {
+      var box = $('tags');
+      box.innerHTML = '';
+      if (!tags.length) { box.textContent = 'Chưa có tag nào (tạo từ app Hello).'; return; }
+      tags.forEach(function (t) { var s = document.createElement('span'); s.className = 'tag'; s.textContent = t.name; box.appendChild(s); });
+    }).catch(function (e) { $('tags').textContent = 'Không đọc được tag: ' + e.code; });
+  }
+
+  // ---------- nhận intent ----------
+  function onIntent(i) {
+    log('[intent] nhận ' + i.type + ' ' + fmt(i.payload));
+    var p = i.payload || {};
+    if (i.type === 'cal.reminder.create') {
+      var id = crypto.randomUUID();
+      return m.db.execute('INSERT INTO reminders (id, title, at) VALUES (?, ?, ?)', [id, p.title, p.at])
+        .then(function () {
+          // at trong quá khứ → shell cho kêu ngay; id trùng → thay
+          return m.notify.schedule({ id: id, at: p.at, title: p.title, body: 'Nhắc từ lịch', ref: { reminderId: id } });
+        })
+        .then(function () { toast('Đã tạo nhắc "' + p.title + '"'); return refresh(); })
+        .catch(function (e) { log('[intent] lỗi: ' + e.code + ' — ' + e.message); });
+    }
+    if (i.type === 'cal.event.open') {
+      $('detail-body').textContent = (p.title || 'Sự kiện') + (p.at ? ' · ' + when(p.at) : '');
+      $('detail').classList.add('show');
+      window.scrollTo(0, 0);
+    }
+  }
+  $('detail-close').onclick = function () { $('detail').classList.remove('show'); };
+  m.sdk.on('intent', onIntent);
+  m.sdk.on('resume', function () { refresh(); });
+
+  // ---------- thao tác ----------
+  $('photo').onclick = function () {
+    show('chọn ảnh', m.ui.pickImage()).then(function (r) {
+      var f = r && r.files && r.files[0];
+      if (!f) return;
+      thumbs[f.fileId] = f.uri;
+      return m.db.query('SELECT id FROM reminders ORDER BY created_at DESC, id LIMIT 1', []).then(function (rows) {
+        if (!rows.length) { toast('Chưa có nhắc nào để gắn ảnh'); return; }
+        return m.db.execute('UPDATE reminders SET file_id = ? WHERE id = ?', [f.fileId, rows[0].id]).then(function () { toast('Đã gắn ảnh vào nhắc mới nhất'); return refresh(); });
+      });
+    });
+  };
+  $('n-ok').onclick = function () {
+    show('example.com', m.net.fetch('https://example.com/').then(function (r) { return { status: r.status, bytes: r.body.length }; }));
+  };
+  $('n-bad').onclick = function () { show('domain lạ', m.net.fetch('https://example.net/')); };
+  $('share').onclick = function () { show('chia sẻ', m.ui.share({ title: 'Hello Lịch', text: 'Nhắc từ Hello Lịch' })); };
+
+  // ---------- đồng bộ ----------
+  var LABEL = { online: 'Đã đồng bộ', syncing: 'Đang đồng bộ', offline: 'Offline', error: 'Lỗi đồng bộ' };
+  function showSync(s) {
+    var el = $('sync');
+    el.className = 'chip ' + s.state;
+    el.textContent = LABEL[s.state] + (s.pending ? ' · ' + s.pending + ' chờ gửi' : '') + (s.rejected ? ' · ' + s.rejected + ' bị từ chối' : '');
+  }
+  function refreshInfo() { return m.sdk.info().then(function (i) { $('ro').classList.toggle('show', !!i.readOnly); }); }
+  m.sdk.on('sync', function (s) { showSync(s); refreshInfo(); refreshTags(); });
+
+  Promise.all([refresh(), refreshTags(), m.sync.status().then(showSync), refreshInfo()])
+    .then(function () { return m.sdk.ready(); });
+  setInterval(function () { refresh(); refreshTags(); }, 2000); // thấy dữ liệu từ máy khác sau khi sync
+})();
+</script>
+</body>
+</html>

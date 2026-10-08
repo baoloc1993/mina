@@ -8,7 +8,7 @@
 # Artifact để CHẠY nằm ở deployment/ (deployment/README.md). Giá trị biến môi trường nằm ở
 # deployment/local/.env (không commit) — make nạp vào môi trường, không in ra.
 
-.PHONY: help dev check test accept migrate deploy doctor gate
+.PHONY: help dev check test accept migrate deploy doctor gate mock seed
 
 PYTHON ?= python
 export PYTHONUTF8 = 1
@@ -30,11 +30,13 @@ APPLE_CLIENT_SECRET ?= local-no-apple
 export
 
 help:
-	@echo "Mina — (vòng 2: nền platform-backend)"
+	@echo "Mina — (vòng 3: shell nền + SDK v0 + mock SDK)"
 	@echo ""
 	@echo "  make dev      Supabase (+ Storage) + PowerSync (docker) + khoá ký thử + Metro cho dev build Android"
-	@echo "  make check    typecheck shell + gói hello + CLI registry + Edge Functions"
-	@echo "  make test     pgTAP (RLS, quota, thiết bị) + deno test (LWW) + node test (lint/ký) + Jest (shell)"
+	@echo "  make check    tokens + typecheck shell + SDK/mock + đóng gói fixtures + CLI registry + Edge Functions"
+	@echo "  make test     pgTAP + deno test + node test (CLI) + Jest (shell: bridge, package manager, entitlement…) + Vitest (SDK + mock)"
+	@echo "  make mock     mock SDK trên trình duyệt: make mock FIXTURE=fixtures/miniapp-hello"
+	@echo "  make seed     dữ liệu mẫu + publish hello 0.2.0, hello-cal, bản hello 0.3.0 lỗi migration (cần make dev)"
 	@echo "  make accept   acceptance HTTP AC-1..AC-10 trên backend đang chạy (sau make dev + seed)"
 	@echo "  make migrate  áp migration có version vào DB local"
 	@echo "  make deploy   (chưa có nơi deploy — vòng 7)"
@@ -54,17 +56,25 @@ dev:
 	cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$(SUPABASE_URL) EXPO_PUBLIC_SUPABASE_ANON_KEY=$(SUPABASE_ANON_KEY) EXPO_PUBLIC_POWERSYNC_URL=$(POWERSYNC_URL) npx expo start --dev-client
 
 check:
-	node $(SHELL_DIR)/fixtures/miniapp-hello/build.js
-	cd $(SHELL_DIR) && npx tsc --noEmit
+	cd $(SHELL_DIR) && npm --silent run build:tokens && npm --silent run build:fixtures
+	cd $(SHELL_DIR) && npx tsc --noEmit && npx tsc --noEmit -p packages/miniapp-sdk
 	$(NPM_BE) run typecheck
 	$(NPM_BE) exec -- deno check --no-lock supabase/functions/upload/index.ts supabase/functions/catalog/index.ts supabase/functions/issue-app-token/index.ts
-	@echo "OK: typecheck shell + CLI registry + Edge Functions sạch, gói hello đóng được"
+	@echo "OK: typecheck shell + SDK/mock + CLI registry + Edge Functions sạch, fixtures đóng được"
 
 test:
 	$(SUPABASE) test db
 	$(NPM_BE) run test:functions
 	$(NPM_BE) run test:cli
 	cd $(SHELL_DIR) && npx jest
+	cd $(SHELL_DIR) && npm --silent run test:sdk
+
+FIXTURE ?= fixtures/miniapp-hello
+mock:
+	cd $(SHELL_DIR) && npm run mock -- $(FIXTURE)
+
+seed:
+	$(PYTHON) deployment/local/seed/seed.py
 
 accept:
 	$(NPM_BE) run accept
