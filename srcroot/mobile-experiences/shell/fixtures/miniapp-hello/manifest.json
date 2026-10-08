@@ -1,0 +1,9 @@
+{
+  "id": "vn.app.hello",
+  "name": "Hello",
+  "version": "0.0.1",
+  "sdk": "0",
+  "entry": "index.html",
+  "scopes": ["db", "auth.token"],
+  "tables": ["items"]
+}

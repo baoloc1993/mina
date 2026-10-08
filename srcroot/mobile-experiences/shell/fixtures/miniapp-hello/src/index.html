@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hello</title>
+<style>
+  body { font-family: sans-serif; margin: 0; padding: 12px; background: #fff; color: #111; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  input { flex: 1; padding: 10px; font-size: 16px; border: 1px solid #888; border-radius: 6px; }
+  button { padding: 10px 12px; font-size: 14px; border: 1px solid #333; border-radius: 6px; background: #eee; }
+  ul { list-style: none; padding: 0; margin: 0 0 12px; }
+  li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #ddd; }
+  li span { flex: 1; word-break: break-word; }
+  li.done span { text-decoration: line-through; color: #666; }
+  #empty { color: #555; }
+  #log { font-family: monospace; font-size: 12px; white-space: pre-wrap; background: #f4f4f4; padding: 8px; border-radius: 6px; }
+  details { margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Hello — mini app thử</h1>
+<div class="row">
+  <input id="title" placeholder="Thêm mục mới" autocomplete="off">
+  <button id="add">Thêm</button>
+</div>
+<p id="empty" hidden>Chưa có mục nào</p>
+<ul id="list"></ul>
+
+<details open>
+  <summary>Ca phá bridge (AC-6)</summary>
+  <div class="row" style="flex-wrap:wrap">
+    <button data-case="a">(a) bảng không khai</button>
+    <button data-case="b">(b) SQL hỏng</button>
+    <button data-case="c1">(c) ATTACH</button>
+    <button data-case="c2">(c) PRAGMA</button>
+    <button data-case="c3">(c) DROP</button>
+    <button data-case="d">(d) notify.*</button>
+    <button data-case="e">(e) fetch</button>
+    <button data-case="ok">SQL hợp lệ</button>
+    <button data-case="token">getAppToken</button>
+  </div>
+</details>
+<div id="log"></div>
+
+<script>
+(function () {
+  var listEl = document.getElementById('list');
+  var emptyEl = document.getElementById('empty');
+  var logEl = document.getElementById('log');
+  var titleEl = document.getElementById('title');
+
+  function log(msg) { logEl.textContent = msg + '\n' + logEl.textContent.slice(0, 1500); }
+  function uuid() { return crypto.randomUUID(); }
+
+  function render(rows) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = rows.length > 0;
+    rows.forEach(function (r) {
+      var li = document.createElement('li');
+      if (r.done) li.className = 'done';
+      var span = document.createElement('span'); span.textContent = r.title;
+      var tog = document.createElement('button'); tog.textContent = r.done ? 'Bỏ xong' : 'Xong';
+      tog.onclick = function () {
+        window.miniapp.db.execute('UPDATE items SET done = ? WHERE id = ?', [r.done ? 0 : 1, r.id]).then(refresh);
+      };
+      var del = document.createElement('button'); del.textContent = 'Xoá';
+      del.onclick = function () {
+        window.miniapp.db.execute('DELETE FROM items WHERE id = ?', [r.id]).then(refresh);
+      };
+      li.appendChild(span); li.appendChild(tog); li.appendChild(del);
+      listEl.appendChild(li);
+    });
+  }
+
+  function refresh() {
+    return window.miniapp.db
+      .query('SELECT id, title, done FROM items WHERE deleted_at IS NULL ORDER BY created_at, id', [])
+      .then(render)
+      .catch(function (e) { log('query lỗi ' + e.code + ': ' + e.message); });
+  }
+
+  document.getElementById('add').onclick = function () {
+    var t = titleEl.value.trim();
+    if (!t) return;
+    var t0 = performance.now();
+    window.miniapp.db.execute('INSERT INTO items (id, title, done) VALUES (?, ?, ?)', [uuid(), t, 0])
+      .then(refresh)
+      .then(function () { log('thêm xong sau ' + Math.round(performance.now() - t0) + ' ms'); });
+    titleEl.value = '';
+  };
+
+  function expectReject(name, p) {
+    p.then(function () { log('[' + name + '] KHÔNG BỊ CHẶN — LỖI!'); })
+     .catch(function (e) { log('[' + name + '] bị chặn: ' + (e.code || e.name) + ' — ' + e.message); });
+  }
+  var m = window.miniapp;
+  var cases = {
+    a: function () { expectReject('a', m.db.query('SELECT * FROM secrets', [])); },
+    b: function () { expectReject('b', m.db.execute('SELEC * FRM items', [])); },
+    c1: function () { expectReject('c-attach', m.db.execute("ATTACH DATABASE 'x.db' AS x", [])); },
+    c2: function () { expectReject('c-pragma', m.db.execute('PRAGMA key = 1', [])); },
+    c3: function () { expectReject('c-drop', m.db.execute('DROP TABLE items', [])); },
+    d: function () { expectReject('d', m.call('notify.local', { title: 'x' })); },
+    e: function () { expectReject('e', fetch('http://10.0.2.2:54321/rest/v1/')); },
+    ok: function () { m.db.query('SELECT COUNT(*) AS n FROM items', []).then(function (r) { log('SQL hợp lệ chạy được: ' + JSON.stringify(r)); }); },
+    token: function () {
+      m.auth.getAppToken().then(function (t) { log('token ' + t.token.slice(0, 20) + '… hết hạn ' + t.expires_at); })
+       .catch(function (e) { log('token lỗi ' + e.code + ': ' + e.message); });
+    }
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-case]'), function (b) {
+    b.onclick = cases[b.getAttribute('data-case')];
+  });
+
+  refresh().then(function () { return m.sdk.ready(); });
+  setInterval(refresh, 1500); // thấy thay đổi từ máy khác sau khi sync
+})();
+</script>
+</body>
+</html>
