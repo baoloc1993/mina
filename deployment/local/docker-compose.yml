@@ -23,7 +23,6 @@ services:
       POWERSYNC_CONFIG_PATH: /config/powersync.yaml
       PS_DATA_SOURCE_URI: postgresql://postgres:postgres@host.docker.internal:54322/postgres
       PS_MONGO_URI: mongodb://mongo:27017/powersync?replicaSet=rs0
-      PS_SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ../../srcroot/boundaries/platform-backend/powersync:/config:ro

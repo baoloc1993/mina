@@ -1,7 +1,7 @@
 // Shell vòng 1 (spike): đăng nhập Email OTP → mở DB mã hoá + sync → mở mini app hello trong WebView.
 // Không phải UI sản phẩm (design system ở vòng 3): chỉ đủ để đi hết luồng lõi và đo.
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, Platform, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import type { PowerSyncDatabase } from '@powersync/react-native';
 import { requestOtp, supabase, tenantIdOf, verifyOtp } from './src/auth/supabase';
@@ -95,7 +95,7 @@ export default function App() {
 
   if (signedIn === null) {
     return (
-      <SafeAreaView style={styles.fill}>
+      <SafeAreaView style={styles.root}>
         <Text style={styles.pad}>{msg || 'Đang khởi động…'}</Text>
       </SafeAreaView>
     );
@@ -103,7 +103,7 @@ export default function App() {
 
   if (!signedIn) {
     return (
-      <SafeAreaView style={[styles.fill, styles.pad]}>
+      <SafeAreaView style={[styles.root, styles.pad]}>
         <Text style={styles.h1}>Đăng nhập</Text>
         <TextInput
           style={styles.input}
@@ -125,7 +125,7 @@ export default function App() {
 
   const med = median(openTimes);
   return (
-    <SafeAreaView style={styles.fill}>
+    <SafeAreaView style={styles.root}>
       <View style={styles.bar}>
         <Text testID="sync-status" style={styles.status}>
           Trạng thái: {status}
@@ -157,6 +157,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#fff' },
+  root: { flex: 1, backgroundColor: '#fff', paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 0 : 0 },
   pad: { padding: 16 },
   h1: { fontSize: 20, marginBottom: 12 },
   input: { borderWidth: 1, borderColor: '#888', borderRadius: 6, padding: 10, marginBottom: 10, fontSize: 16 },

@@ -383,8 +383,9 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+[edge_runtime.secrets]
+APP_TOKEN_SECRET = "env(APP_TOKEN_SECRET)"
+APP_TOKEN_TTL_SECONDS = "env(APP_TOKEN_TTL_SECONDS)"
 
 [analytics]
 enabled = false
@@ -418,3 +419,11 @@ enabled = true
 verify_jwt = false
 [functions.upload]
 verify_jwt = false
+
+# Mã OTP 6 số thay vì link (shell nhập mã, không mở link).
+[auth.email.template.magic_link]
+subject = "Mã đăng nhập"
+content_path = "./supabase/templates/otp.html"
+[auth.email.template.confirmation]
+subject = "Mã đăng nhập"
+content_path = "./supabase/templates/otp.html"

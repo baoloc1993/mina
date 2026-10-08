@@ -43,7 +43,9 @@ Deno.serve(async (req) => {
 
   const ttl = Number(Deno.env.get("APP_TOKEN_TTL_SECONDS") ?? "900");
   const now = Math.floor(Date.now() / 1000);
-  const secret = encoder.encode(Deno.env.get("APP_TOKEN_SECRET")!);
+  const rawSecret = Deno.env.get("APP_TOKEN_SECRET");
+  if (!rawSecret) return json({ error: "SERVER_MISCONFIGURED", detail: "thiếu APP_TOKEN_SECRET" }, 500);
+  const secret = encoder.encode(rawSecret);
   const jwt = await new SignJWT({ tenant_id: tenantId, app_id: appId })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)

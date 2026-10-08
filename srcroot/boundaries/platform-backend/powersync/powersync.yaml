@@ -11,7 +11,7 @@ port: 8080
 sync_rules:
   path: /config/sync-rules.yaml
 client_auth:
-  # Xác thực JWT của Supabase Auth (HS256 local). Vòng 7 đổi sang JWKS của Supabase Cloud.
-  supabase: true
-  supabase_jwt_secret: !env PS_SUPABASE_JWT_SECRET
+  # Supabase CLI mới ký JWT bằng ES256 (khoá bất đối xứng) → xác thực qua JWKS, không dùng secret HS256.
+  # Vòng 7 (Supabase Cloud) đổi uri sang https://<project>.supabase.co/auth/v1/.well-known/jwks.json
+  jwks_uri: http://host.docker.internal:54321/auth/v1/.well-known/jwks.json
   audience: ["authenticated"]
