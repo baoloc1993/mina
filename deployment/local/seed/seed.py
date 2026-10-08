@@ -1,12 +1,14 @@
-"""Seed local (PRD §7): 2 tenant (a@test.local, b@test.local), mỗi tenant 20 mục app_hello_items.
+"""Seed local (PRD §7): 2 tenant (a@test.local, b@test.local) + registry vòng 2.
 
-  python deployment/local/seed/seed.py          # tạo user nếu thiếu + đặt lại 20 mục mỗi tenant
-  python deployment/local/seed/seed.py --clean  # xoá sạch mục + 2 user thử (DB về trạng thái rỗng cho dogfood đợt 1)
+  python deployment/local/seed/seed.py          # user + khoá ký thử + publish hello / private-a + cài + sync rules + 20 mục hello mỗi tenant
+  python deployment/local/seed/seed.py --clean  # xoá mục + 2 user thử (cascade installations/devices); registry giữ nguyên
 
-Khoá lấy từ `supabase status` (không đọc .env, không in ra). Chạy sau `make dev`.
+Registry sau seed: hello 0.0.1 (published, công khai, cài cho cả 2 tenant) · vn.app.private-a 0.0.1 (published, riêng của
+tenant-a, cài cho tenant-a). Khoá lấy từ `supabase status` (không đọc .env, không in ra). Chạy sau `make dev`.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -14,6 +16,10 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 BACKEND = os.path.join(ROOT, "srcroot", "boundaries", "platform-backend")
+HELLO_FIXTURE = os.path.join(ROOT, "srcroot", "mobile-experiences", "shell", "fixtures", "miniapp-hello")
+PRIVATE_A = os.path.join(BACKEND, "fixtures", "private-a")
+STAGE = os.path.join(ROOT, "deployment", "local", ".build", "hello")
+SYNC_RULES = os.path.join(BACKEND, "powersync", "sync-rules.yaml")
 DB_CONTAINER = "supabase_db_platform-backend"
 USERS = ["a@test.local", "b@test.local"]
 
@@ -25,6 +31,17 @@ def sql(query: str) -> str:
     )
     if r.returncode != 0:
         sys.exit(f"psql lỗi: {r.stderr.strip()}")
+    return r.stdout.strip()
+
+
+def registry(*args: str) -> str:
+    """Gọi CLI registry (cwd = backend). Dừng seed nếu lỗi — in nguyên văn lỗi tiếng Việt của CLI."""
+    r = subprocess.run(
+        ["npm", "run", "--silent", "registry", "--", *args], cwd=BACKEND, shell=(os.name == "nt"),
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if r.returncode != 0:
+        sys.exit(f"registry {' '.join(args)} lỗi: {(r.stderr or r.stdout).strip()}")
     return r.stdout.strip()
 
 
@@ -67,19 +84,67 @@ def admin_create(env: dict, email: str) -> None:
 def clean() -> None:
     sql("truncate app_hello_items")
     emails = ",".join(f"'{e}'" for e in USERS)
-    sql(f"delete from auth.users where email in ({emails})")  # tenants xoá theo (cascade)
-    print("đã xoá mục và 2 user thử")
+    sql(f"delete from auth.users where email in ({emails})")  # tenants + installations + devices xoá theo (cascade)
+    print("đã xoá mục và 2 user thử (registry giữ nguyên)")
+
+
+def has_version(app: str, version: str) -> bool:
+    return bool(sql(f"select 1 from app_versions where app_id = '{app}' and version = '{version}'"))
+
+
+def stage_hello() -> str:
+    """Hello chưa có thư mục đóng gói (build.js chỉ ghi zip vào assets của shell) → dựng thư mục tạm, không sửa shell."""
+    shutil.rmtree(STAGE, ignore_errors=True)
+    os.makedirs(STAGE)
+    shutil.copy(os.path.join(HELLO_FIXTURE, "manifest.json"), STAGE)
+    shutil.copy(os.path.join(HELLO_FIXTURE, "src", "index.html"), STAGE)
+    return STAGE
+
+
+def publish_fixture(app: str, version: str, directory: str, owner: str | None = None) -> None:
+    if has_version(app, version):
+        print(f"  {app}@{version} đã có trong registry")
+        return
+    args = ["publish", directory] + (["--owner", owner] if owner else [])
+    print("  " + registry(*args).splitlines()[0])
+    registry("promote", app, version)
+    print(f"  promote {app}@{version} → published")
 
 
 def seed() -> None:
     env = sb_env()
     for e in USERS:
         admin_create(env, e)
+
+    print(registry("keygen"))
+    publish_fixture("vn.app.hello", "0.0.1", stage_hello())
+    publish_fixture("vn.app.private-a", "0.0.1", PRIVATE_A, owner=USERS[0])
+
+    tenants = {}
     for i, e in enumerate(USERS):
-        tenant = "a" if i == 0 else "b"
         tid = sql(f"select t.id from tenants t join auth.users u on u.id = t.owner_user_id where u.email = '{e}'")
         if not tid:
             sys.exit(f"không thấy tenant của {e}")
+        tenants[e] = tid
+
+    for e, tid in tenants.items():
+        sql(f"select public._install_app('{tid}', 'vn.app.hello')")
+    sql(f"select public._install_app('{tenants[USERS[0]]}', 'vn.app.private-a')")
+    print("  cài vn.app.hello cho cả 2 tenant, vn.app.private-a cho tenant-a")
+
+    before = open(SYNC_RULES, encoding="utf-8").read() if os.path.exists(SYNC_RULES) else ""
+    print("  " + registry("gen-sync-rules").splitlines()[0])
+    after = open(SYNC_RULES, encoding="utf-8").read()
+    if before != after:
+        print("  sync-rules đổi → restart PowerSync")
+        subprocess.run(
+            ["docker", "compose", "--env-file", os.path.join(ROOT, "deployment", "local", ".env"),
+             "-f", os.path.join(ROOT, "deployment", "local", "docker-compose.yml"), "restart", "powersync"],
+            check=True, capture_output=True,
+        )
+
+    for i, (e, tid) in enumerate(tenants.items()):
+        tenant = "a" if i == 0 else "b"
         sql(f"delete from app_hello_items where tenant_id = '{tid}'")
         sql(
             "insert into app_hello_items (id, tenant_id, title, done) "

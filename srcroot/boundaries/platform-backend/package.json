@@ -1,0 +1,25 @@
+{
+  "name": "platform-backend",
+  "private": true,
+  "type": "module",
+  "description": "Backend nền tảng mini app — CLI registry + test Edge Functions (Deno)",
+  "scripts": {
+    "registry": "node scripts/registry.ts",
+    "test:cli": "node --test \"scripts/lib/*.test.ts\"",
+    "test:functions": "deno test --no-lock supabase/functions/",
+    "typecheck": "tsc --noEmit -p scripts",
+    "accept": "node scripts/acceptance.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "deno": "^2.1.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "fflate": "^0.8.2",
+    "jose": "^5.10.0",
+    "pg": "^8.13.0"
+  }
+}

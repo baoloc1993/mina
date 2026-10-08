@@ -1,0 +1,9 @@
+{
+  "id": "vn.app.private-a",
+  "name": "Riêng của A",
+  "version": "0.0.1",
+  "sdk": "0",
+  "entry": "index.html",
+  "scopes": ["db"],
+  "tables": ["notes"]
+}

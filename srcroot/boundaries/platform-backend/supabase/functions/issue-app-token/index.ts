@@ -1,34 +1,16 @@
 // api-app-token (CAP-ID-03): đổi JWT phiên của người dùng thành JWT ngắn hạn theo từng mini app.
 // tenant_id lấy từ JWT phiên (đã xác thực), KHÔNG từ body. Body chỉ có { app_id }.
+// Vòng 2: chỉ cấp khi tenant đã cài và bật app (đọc `installations` bằng JWT người gọi → RLS áp thật).
 import { SignJWT } from "npm:jose@5";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { authenticate, decodeClaims, json } from "../_shared/auth.ts";
 
 const encoder = new TextEncoder();
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
-
-  const auth = req.headers.get("authorization") ?? "";
-  const token = auth.replace(/^Bearer\s+/i, "");
-  if (!token) return json({ error: "UNAUTHORIZED" }, 401);
-
-  // Xác thực phiên qua GoTrue (không tự giải mã JWT để khỏi tin payload chưa kiểm chữ ký).
-  const authUrl = `${Deno.env.get("SUPABASE_URL")}/auth/v1/user`;
-  const who = await fetch(authUrl, {
-    headers: { authorization: `Bearer ${token}`, apikey: Deno.env.get("SUPABASE_ANON_KEY")! },
-  });
-  if (!who.ok) return json({ error: "UNAUTHORIZED" }, 401);
-
-  // tenant_id nằm trong claim của JWT phiên (custom access token hook).
-  const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-  const tenantId = claims.tenant_id as string | undefined;
-  if (!tenantId) return json({ error: "NO_TENANT" }, 403);
+  const caller = await authenticate(req);
+  if (caller instanceof Response) return caller;
 
   let body: { app_id?: string };
   try {
@@ -41,17 +23,28 @@ Deno.serve(async (req) => {
     return json({ error: "BAD_APP_ID" }, 400);
   }
 
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${caller.token}` } },
+    auth: { persistSession: false },
+  });
+  const { data: inst, error } = await sb.from("installations").select("enabled").eq("app_id", appId).maybeSingle();
+  if (error) {
+    console.error("[issue-app-token]", error.message);
+    return json({ error: "INTERNAL" }, 500);
+  }
+  if (!inst || !inst.enabled) return json({ error: "APP_NOT_INSTALLED" }, 403);
+
   const ttl = Number(Deno.env.get("APP_TOKEN_TTL_SECONDS") ?? "900");
   const now = Math.floor(Date.now() / 1000);
   const rawSecret = Deno.env.get("APP_TOKEN_SECRET");
   if (!rawSecret) return json({ error: "SERVER_MISCONFIGURED", detail: "thiếu APP_TOKEN_SECRET" }, 500);
-  const secret = encoder.encode(rawSecret);
-  const jwt = await new SignJWT({ tenant_id: tenantId, app_id: appId })
+  const claims = decodeClaims(caller.token);
+  const jwt = await new SignJWT({ tenant_id: caller.tenantId, app_id: appId })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(claims.sub)
+    .setSubject(String(claims?.sub ?? caller.userId))
     .setIssuedAt(now)
     .setExpirationTime(now + ttl)
-    .sign(secret);
+    .sign(encoder.encode(rawSecret));
 
   return json({ token: jwt, expires_at: now + ttl });
 });
