@@ -1,0 +1,7 @@
+# sync-rules (contract v0, vòng 1): một bucket theo tenant_id lấy từ JWT.
+# Không bao giờ lọc theo giá trị client gửi lên — chỉ theo claim đã ký.
+bucket_definitions:
+  by_tenant:
+    parameters: select request.jwt() ->> 'tenant_id' as tenant_id
+    data:
+      - select * from app_hello_items where tenant_id = bucket.tenant_id

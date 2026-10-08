@@ -1,0 +1,29 @@
+# PowerSync Open Edition cho local. Supabase tự chạy bằng `supabase start` (xem Makefile) —
+# compose này CHỈ thêm sync engine + kho bucket của nó. Mọi container đặt mem_limit.
+name: mina-local
+services:
+  mongo:
+    image: mongo:7.0
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    mem_limit: 512m
+    ports: ["27017:27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try{rs.status().ok}catch(e){rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok}"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+  powersync:
+    image: journeyapps/powersync-service:latest
+    depends_on:
+      mongo: { condition: service_healthy }
+    command: ["start", "-r", "unified"]
+    mem_limit: 512m
+    ports: ["8090:8080"]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+      PS_DATA_SOURCE_URI: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      PS_MONGO_URI: mongodb://mongo:27017/powersync?replicaSet=rs0
+      PS_SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - ../../srcroot/boundaries/platform-backend/powersync:/config:ro
