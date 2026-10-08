@@ -166,5 +166,5 @@ Deno.test("classifyDbError", () => {
   assertEquals(classifyDbError({ code: "22P02", message: "" }), "SCHEMA");
   assertEquals(classifyDbError({ code: "PGRST204", message: "" }), "SCHEMA");
   assertEquals(classifyDbError({ code: "40001", message: "" }), null);
-  assertEquals(MAX_OPS, 500);
+  assertEquals(MAX_OPS, 100);
 });

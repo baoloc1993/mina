@@ -24,7 +24,7 @@ export interface Store {
 const SYSTEM_COLUMNS = new Set(["id", "tenant_id", "created_at", "updated_at", "deleted_at"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COLUMN = /^[a-z_][a-z0-9_]*$/;
-export const MAX_OPS = 500;
+export const MAX_OPS = 100; // ~9 ms/thay đổi: 500 song song vượt giới hạn CPU của edge runtime (dogfood đợt 2)
 
 export function classifyDbError(e: { code?: string; message: string }): string | null {
   const c = e.code ?? "";

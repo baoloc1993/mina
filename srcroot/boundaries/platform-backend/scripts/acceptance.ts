@@ -1,7 +1,7 @@
 // Acceptance W2 — chạy AC-1..AC-10 (và phần HTTP của AC-11) trên backend local đang chạy, bằng HTTP + CLI thật.
 //   npm run accept            (cần `make dev` + `python deployment/local/seed/seed.py` đã chạy)
 // Dọn sau khi chạy: app thử `vn.app.accept*`, user `accept-*@test.local`, phiên/thiết bị của 2 user seed; trả gói + cài đặt về như seed.
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -437,6 +437,54 @@ async function main(): Promise<void> {
   check("không JWT → 401 UNAUTHORIZED", (await fn("upload", undefined, { ops: [] })).status === 401);
   check("body sai khuôn → 400 BAD_REQUEST", (await fn("upload", tokA, { khong: "co ops" })).status === 400);
   check("thay đổi sai khuôn → REJECTED/BAD_OP, không làm hỏng lô", ((await up(tokA, [{ op: "XOA", table: T, id: "x" }, { op: "PUT", table: T, id: id(10), data: { title: "ACC: ok" } }])).body.results ?? []).map((x: any) => x.code ?? x.status).join() === "BAD_OP,ACCEPTED");
+
+  // ---------------------------------------------------------------- dogfood đợt 2: hồi quy
+  section("Hồi quy dogfood đợt 2 · retry, race publish, phiên thu hồi, giới hạn lô");
+  const rid = id(20);
+  const badOps = [{ op: "PUT", table: "bang_la", id: rid, data: {} }];
+  await up(tokB, badOps); await up(tokB, badOps); await up(tokB, badOps);
+  check("gửi lại 3 lần cùng một thay đổi hỏng → chỉ 1 dòng sync_rejections", (await q("select count(*)::int n from sync_rejections where tenant_id = $1 and row_id = $2", [tB, rid]))[0].n === 1);
+  await up(tokA, [{ op: "PUT", table: T, id: id(21), data: { title: "ACC: replay" } }]);
+  const u1 = (await row(tokA, id(21))).updated_at;
+  await sleep(50);
+  await up(tokA, [{ op: "PUT", table: T, id: id(21), data: { title: "ACC: replay" } }, { op: "PATCH", table: T, id: id(21), data: { title: "ACC: replay" } }]);
+  check("replay lô không đổi giá trị không đẩy updated_at (không phát sinh thay đổi sync)", (await row(tokA, id(21))).updated_at === u1);
+  const big = Array.from({ length: 101 }, (_, i) => ({ op: "PUT", table: T, id: id(1000 + i), data: { title: "ACC: lô lớn" } }));
+  const r101 = await up(tokA, big);
+  check("lô 101 thay đổi → 400 BAD_REQUEST (tối đa 100)", r101.status === 400 && r101.body.error === "BAD_REQUEST", js(r101.body).slice(0, 80));
+  const r100 = await up(tokA, big.slice(0, 100));
+  check("lô 100 thay đổi → 200, đủ 100 kết quả ACCEPTED", r100.status === 200 && r100.body.results.every((x: any) => x.status === "ACCEPTED") && r100.body.results.length === 100);
+
+  const raceA = makeApp("vn.app.accept4", "0.0.1", { "001.sql": "CREATE TABLE IF NOT EXISTS app_vn_app_accept4_items (id uuid PRIMARY KEY);" });
+  const raceB = makeApp("vn.app.accept4", "0.0.1", { "001.sql": "CREATE TABLE IF NOT EXISTS app_vn_app_accept4_items (id uuid PRIMARY KEY);" });
+  writeFileSync(join(raceA, "index.html"), "<p>variant A</p>");
+  writeFileSync(join(raceB, "index.html"), "<p>variant B</p>");
+  const runAsync = (dir: string) => new Promise<{ code: number; out: string }>((res) => {
+    const c = spawn(process.execPath, ["scripts/registry.ts", "publish", dir], { cwd: BACKEND_DIR });
+    let out = ""; c.stdout.on("data", (d) => (out += d)); c.stderr.on("data", (d) => (out += d));
+    c.on("close", (code) => res({ code: code ?? 1, out }));
+  });
+  const [pa, pb] = await Promise.all([runAsync(raceA), runAsync(raceB)]);
+  const winners = [pa, pb].filter((p) => p.code === 0).length;
+  const loser = [pa, pb].find((p) => p.code !== 0);
+  check("hai publish cùng version chạy song song → đúng một thành công, bên kia VERSION_NOT_GREATER (không lỗi Postgres thô)", winners === 1 && /VERSION_NOT_GREATER/.test(loser?.out ?? ""), js([pa.out.slice(0, 80), pb.out.slice(0, 80)]));
+  const dbSha = (await q("select sha256 from app_versions where app_id = 'vn.app.accept4' and version = '0.0.1'"))[0]?.sha256;
+  const blob = await storage.download("vn.app.accept4/0.0.1.zip");
+  const storedSha = blob.data ? createHash("sha256").update(Buffer.from(await blob.data.arrayBuffer())).digest("hex") : "";
+  check("gói trong Storage khớp sha256 trong DB (bản thua không ghi đè bản thắng)", !!dbSha && dbSha === storedSha, `db=${dbSha?.slice(0, 8)} storage=${storedSha.slice(0, 8)}`);
+  const clash = registry("publish", makeApp("vn.app.accept4-x", "0.0.1", {}, {}));
+  const dirDot = makeApp("vn.app.accept5-a", "0.0.1", { "001.sql": "CREATE TABLE IF NOT EXISTS app_vn_app_accept5_a_items (id uuid PRIMARY KEY);" });
+  registry("publish", dirDot);
+  const dirDash = makeApp("vn.app.accept5.a", "0.0.1", {});
+  const pc = registry("publish", dirDash);
+  check("id gần giống (cùng table_prefix) → TABLE_PREFIX_CONFLICT, không lỗi Postgres thô", /TABLE_PREFIX_CONFLICT/.test(pc.out), pc.out);
+  void clash;
+
+  const sx = await extraSession(A_EMAIL, serviceKey);
+  const dx = ((await rest(`devices?select=id,session_id&created_at=gte.${encodeURIComponent(t0.toISOString())}`, tokA)).body as any[]).find((d) => d.session_id === claims(sx.access_token).session_id);
+  await rpc("revoke_device", { p_device_id: dx.id }, tokA);
+  const ri2 = await rpc("install_app", { p_app_id: "vn.app.hello" }, sx.access_token);
+  check("JWT cũ của phiên đã thu hồi gọi install_app → SESSION_REVOKED", ri2.status >= 400 && /SESSION_REVOKED/.test(js(ri2.body)), js(ri2.body));
 
   // ---------------------------------------------------------------- AC-9
   section("AC-9 · Sync rules theo app đã cài (PowerSync thật) + RLS");

@@ -48,7 +48,7 @@ function makeStore(token: string, tenantId: string): Store {
 
     async flush() {
       // Một INSERT cho cả lô; lỗi ghi hàng đợi lỗi không làm hỏng lô (kết quả vẫn trả đúng).
-      if (pending.length > 0) await sb.from("sync_rejections").insert(pending.splice(0));
+      if (pending.length > 0) await sb.from("sync_rejections").upsert(pending.splice(0), { onConflict: "tenant_id,table_name,row_id,op,code", ignoreDuplicates: true });
     },
   };
 }

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { Client } from "pg";
 import { RegistryError } from "./errors.ts";
 import { lintMigration } from "./lint.ts";
-import { buildZip, derivePrefix, readManifest, semverCompare } from "./manifest.ts";
+import { buildZip, derivePrefix, type Manifest, readManifest, semverCompare } from "./manifest.ts";
 import { type Config, requireServiceKey } from "./env.ts";
 import { loadPrivateKey, publicOf, sha256, signDigest } from "./sign.ts";
 
@@ -52,14 +52,29 @@ async function hardenSyncTable(db: Client, appId: string, table: string): Promis
   await db.query("insert into public.app_tables (app_id, table_name) values ($1, $2) on conflict (table_name) do nothing", [appId, table]);
 }
 
+/** Hai publish cùng app chạy đồng thời sẽ tranh nhau object Storage + version: tuần tự hoá bằng khoá advisory theo app_id. */
 export async function publish(db: Client, cfg: Config, opts: PublishOptions): Promise<PublishResult> {
   const manifest = readManifest(opts.dir);
+  await db.query("select pg_advisory_lock(hashtextextended($1, 0))", [`publish:${manifest.id}`]);
+  try {
+    return await publishLocked(db, cfg, opts, manifest);
+  } finally {
+    await db.query("select pg_advisory_unlock(hashtextextended($1, 0))", [`publish:${manifest.id}`]);
+  }
+}
+
+async function publishLocked(db: Client, cfg: Config, opts: PublishOptions, manifest: Manifest): Promise<PublishResult> {
   const appId = manifest.id;
 
   // --- 1. Chưa chạm gì: kiểm app / version / migration ---
   const existing = (await db.query("select table_prefix, owner_tenant_id from public.apps where id = $1", [appId])).rows[0];
   const prefix: string = existing?.table_prefix ?? derivePrefix(appId);
   if (prefix.length > 40) throw new RegistryError("BAD_MANIFEST", `table_prefix ${prefix} dài quá 40 ký tự — rút ngắn id app`);
+
+  const clash = (await db.query("select id from public.apps where table_prefix = $1 and id <> $2", [prefix, appId])).rows[0];
+  if (clash) {
+    throw new RegistryError("TABLE_PREFIX_CONFLICT", `id ${appId} cho cùng table_prefix "${prefix}" với app ${clash.id} (. và - đều đổi thành _) — chọn id khác`);
+  }
 
   let ownerTenant: string | null = null;
   if (opts.ownerEmail) {

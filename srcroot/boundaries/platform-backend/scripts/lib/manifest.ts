@@ -1,5 +1,5 @@
 // Đọc + kiểm manifest.json của mini app, đóng gói zip có tính tái lập (cùng nội dung → cùng sha256).
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { zipSync } from "fflate";
 import { RegistryError } from "./errors.ts";
@@ -64,7 +64,9 @@ export function buildZip(dir: string): Uint8Array {
       const full = join(d, name);
       const rel = relative(dir, full).split(sep).join("/");
       if (rel === "migrations") continue;
-      if (statSync(full).isDirectory()) walk(full);
+      const st = lstatSync(full);
+      if (st.isSymbolicLink()) throw new RegistryError("BAD_MANIFEST", `${rel} là symlink — không đóng gói liên kết tượng trưng (có thể kéo file ngoài thư mục app vào gói)`);
+      if (st.isDirectory()) walk(full);
       else files[rel] = [readFileSync(full), { mtime: new Date("2000-01-01T00:00:00Z"), level: 6 }];
     }
   };

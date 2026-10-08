@@ -185,6 +185,16 @@ select throws_ok($$insert into public.sync_rejections (tenant_id, table_name, op
   '42501', null, 'A không ghi hàng đợi lỗi giả tenant B');
 reset role;
 
+select throws_ok($$insert into public.sync_rejections (tenant_id, table_name, row_id, op, code) values ((select ta from ids), 'app_hello_items', 'r1', 'PATCH', 'FORBIDDEN')$$,
+  '23505', null, 'retry cùng một thay đổi hỏng không nhân bản dòng sync_rejections');
+
+-- ---------- phiên đã thu hồi không ghi được qua RPC (JWT cũ còn hạn) ----------
+select pg_temp.as_user('aaaaaaaa-0000-0000-0000-0000000000a1', (select ta from ids), 'aaaaaaaa-1111-0000-0000-000000000002');
+select throws_ok($$select public.install_app('vn.app.pub2')$$, 'P0001', 'SESSION_REVOKED', 'install_app bằng phiên đã thu hồi: SESSION_REVOKED');
+select throws_ok($$select public.uninstall_app('vn.app.pub2')$$, 'P0001', 'SESSION_REVOKED', 'uninstall_app bằng phiên đã thu hồi: SESSION_REVOKED');
+select throws_ok($$select public.revoke_device((select a1 from dev))$$, 'P0001', 'SESSION_REVOKED', 'revoke_device bằng phiên đã thu hồi: SESSION_REVOKED');
+reset role;
+
 -- ---------- updated_at do server ----------
 insert into public.app_hello_items (id, tenant_id, title, updated_at)
   values ('cccccccc-0000-0000-0000-00000000000c', (select ta from ids), 'x', '2000-01-01');
