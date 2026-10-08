@@ -3,7 +3,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import type { SyncState } from '../bridge/types';
 import { Txt, toneColor, type Tone } from './Txt';
-import { chipHeight, color, dotSize, radius, space, stroke } from './theme';
+import { chipHeight, color, dotSize, radius, space, stroke, tapMin } from './theme';
 
 export function chipInfo(state: SyncState, rejected: number): { tone: Tone; text: string } {
   switch (state) {
@@ -52,13 +52,16 @@ export function SyncChip({ state, rejected = 0, onPress, testID }: Props) {
       accessibilityRole="button"
       accessibilityLabel={`Trạng thái đồng bộ: ${text}. Mở màn đồng bộ`}
       onPress={onPress}
-      hitSlop={space.sm}
+      hitSlop={{ top: hitV, bottom: hitV, left: space.sm, right: space.sm }}
       style={styles.chip}
     >
       {inner}
     </Pressable>
   );
 }
+
+// Hình chip giữ 32dp nhưng vùng chạm phải ≥ tap-min: bù phần thiếu bằng hitSlop dọc.
+const hitV = Math.ceil((tapMin - chipHeight) / 2);
 
 const styles = StyleSheet.create({
   chip: {

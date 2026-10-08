@@ -16,7 +16,9 @@ export function MiniAppScreen() {
   const blocked = rt.blockedOpen;
   const fgId = rt.foreground;
   const fgApp = rt.apps.find((a) => a.app_id === fgId);
-  const title = blocked ? blocked.name : (fgApp?.name ?? fgId ?? '');
+  const openingApp = rt.opening && !fgId && !blocked ? rt.apps.find((a) => a.app_id === rt.opening) : undefined;
+  const splash = rt.opening && !fgId && !blocked ? { appId: rt.opening, name: openingApp?.name ?? rt.opening, privateApp: openingApp?.private_to_tenant } : null;
+  const title = blocked ? blocked.name : (fgApp?.name ?? splash?.name ?? fgId ?? '');
   const close = () => (blocked ? runtime.dismissBlockedOpen() : runtime.closeForeground());
 
   return (
@@ -27,6 +29,7 @@ export function MiniAppScreen() {
         right={<SyncChip state={rt.sync.state} rejected={rt.sync.rejected} />}
       />
       <AppFrame
+        splash={splash}
         readOnly={rt.entitlement.readOnly && !blocked}
         blocked={blocked ? { name: blocked.name, message: blocked.message, onClose: close } : null}
       >

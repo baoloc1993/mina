@@ -92,7 +92,7 @@ export function DevicesScreen({ nav }: { nav: Nav }) {
 
   let list: React.ReactNode;
   if (devices === null && !loadErr) {
-    list = <LoadingState kind="rows" count={2} />;
+    list = <LoadingState kind="rows" count={3} />;
   } else if (loadErr) {
     list = <ErrorState code={loadErr} onRetry={() => void load()} />;
   } else if (devices) {
@@ -107,7 +107,7 @@ export function DevicesScreen({ nav }: { nav: Nav }) {
               subtitle={`${d.platform ?? 'Không rõ nền tảng'} · ${d.isThisDevice ? 'đang dùng' : `dùng lần cuối ${formatWhen(d.lastSeenAt)}`}`}
             >
               <Button
-                title={d.isThisDevice ? 'Đăng xuất' : 'Đăng xuất máy này'}
+                title={d.isThisDevice ? 'Đăng xuất' : 'Đăng xuất máy đó'}
                 accessibilityLabel={d.isThisDevice ? 'Đăng xuất khỏi máy này' : `Đăng xuất ${d.name}`}
                 variant={d.isThisDevice ? 'secondary' : 'danger'}
                 disabled={offline}

@@ -7,10 +7,10 @@ const FIXED: Record<string, string> = {
   'notify.local': 'Thông báo',
   'storage.files': 'Lưu ảnh và tệp của app',
   'ui.native': 'Chọn ảnh và chia sẻ',
-  'auth.token': 'Xác thực với máy chủ riêng của app',
+  'auth.token': 'Nhận quyền truy cập riêng cho app',
 };
 
-const CORE: Record<string, string> = { tags: 'Thẻ dùng chung', contacts: 'Danh bạ dùng chung', files: 'Tệp dùng chung' };
+const CORE: Record<string, string> = { tags: 'Thẻ (nhãn) dùng chung giữa các app', contacts: 'Danh bạ dùng chung giữa các app', files: 'Tệp dùng chung giữa các app' };
 
 export function scopeLines(scopes: readonly string[] | undefined | null, network: readonly string[] | undefined | null): string[] {
   const set = new Set(scopes ?? []);

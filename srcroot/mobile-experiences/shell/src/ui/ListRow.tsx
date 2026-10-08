@@ -87,7 +87,7 @@ export function ListRow({ title, subtitle, badge, right, onPress, disabled, chil
 
 const styles = StyleSheet.create({
   group: { backgroundColor: color.surface, borderRadius: radius.lg, overflow: 'hidden' },
-  sep: { height: stroke.thin, backgroundColor: color.border, opacity: opacity.faint },
+  sep: { height: space.xs, backgroundColor: color.bg },
   row: { minHeight: tapMin, paddingVertical: space.sm, paddingHorizontal: space.md, justifyContent: 'center' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   text: { flex: 1, minWidth: 0, gap: space.xs },

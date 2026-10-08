@@ -1,7 +1,7 @@
 {
   "id": "vn.app.hello",
   "name": "Hello",
-  "version": "0.2.0",
+  "version": "0.4.1",
   "sdk": "^0.1",
   "entry": "index.html",
   "icon": "icon.png",

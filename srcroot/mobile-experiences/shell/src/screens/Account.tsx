@@ -34,8 +34,8 @@ export function AccountScreen({ nav }: { nav: Nav }) {
     runProvider(async () => {
       setWhich(p);
       try {
-        await runtime.linkProvider(p);
-        runtime.pushToast({ kind: 'info', text: `Đã liên kết ${p === 'google' ? 'Google' : 'Apple'}` });
+        const linked = await runtime.linkProvider(p);
+        if (linked) runtime.pushToast({ kind: 'info', text: `Đã liên kết ${p === 'google' ? 'Google' : 'Apple'}` });
       } catch (e) {
         runtime.pushToast({
           kind: 'error',
@@ -113,8 +113,6 @@ export function AccountScreen({ nav }: { nav: Nav }) {
         ) : null}
 
         <ListGroup>
-          <ListRow title="Thiết bị" subtitle="Các máy đang đăng nhập" onPress={() => nav.push({ name: 'devices' })} />
-          <ListRow title="Đồng bộ" subtitle={chipInfo(rt.sync.state, rt.sync.rejected).text} onPress={() => nav.push({ name: 'sync' })} />
           <ListRow
             title="Liên kết Google"
             subtitle={providerBusy && which === 'google' ? 'Đang mở…' : 'Đăng nhập nhanh hơn, cùng tài khoản'}
@@ -127,6 +125,8 @@ export function AccountScreen({ nav }: { nav: Nav }) {
             disabled={providerBusy}
             onPress={() => void link('apple')}
           />
+          <ListRow title="Thiết bị" subtitle="Các máy đang đăng nhập" onPress={() => nav.push({ name: 'devices' })} />
+          <ListRow title="Đồng bộ" subtitle={chipInfo(rt.sync.state, rt.sync.rejected).text} onPress={() => nav.push({ name: 'sync' })} />
         </ListGroup>
 
         <Button title="Đăng xuất" variant="secondary" busy={signingOut} busyTitle="Đang kiểm tra…" onPress={() => void signOut()} testID="account-signout" />

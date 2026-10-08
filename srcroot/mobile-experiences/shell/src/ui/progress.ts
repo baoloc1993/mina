@@ -19,7 +19,7 @@ export function stepInfo(step: InstallStep): StepInfo {
     case 'extract':
       return { index: 3, fraction: 0.65, label: 'Đang giải nén…' };
     case 'migrate':
-      return { index: 4, fraction: 0.85, label: 'Đang chạy migration…' };
+      return { index: 4, fraction: 0.85, label: 'Đang chuẩn bị dữ liệu cho app…' };
     case 'register':
       return { index: 4, fraction: 0.95, label: 'Đang hoàn tất…' };
     case 'done':

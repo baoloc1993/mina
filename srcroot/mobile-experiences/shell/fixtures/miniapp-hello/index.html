@@ -30,7 +30,8 @@
   button.danger { color: var(--color-danger); }
   button.danger.armed { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-on-primary); }
   button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
-  #toast { min-height: 24px; margin-top: var(--space-xs); font-size: var(--text-sm); color: var(--color-text-muted); }
+  input::placeholder, textarea::placeholder { color: var(--color-text-muted); opacity: 1; }
+  #toast { overflow-wrap: anywhere; min-height: 24px; margin-top: var(--space-xs); font-size: var(--text-sm); color: var(--color-text-muted); }
 
   ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
   li { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); min-height: 56px; background: var(--color-surface); border-radius: var(--radius-md); }
@@ -41,7 +42,7 @@
   .group { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
   details { margin-top: var(--space-lg); }
   summary { min-height: var(--tap-min); display: flex; align-items: center; font-weight: 600; font-size: var(--text-lg); cursor: pointer; }
-  #log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-sm); white-space: pre-wrap; background: var(--color-surface); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); min-height: var(--tap-min); max-height: 280px; overflow: auto; }
+  #log { font-family: var(--font-sans); font-size: var(--text-sm); white-space: pre-wrap; background: var(--color-surface); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); min-height: var(--tap-min); max-height: 280px; overflow: auto; }
   #photo { max-width: 100%; max-height: 160px; border-radius: var(--radius-md); margin-top: var(--space-sm); display: none; }
 </style>
 </head>
@@ -119,7 +120,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('list'), emptyEl = $('empty'), logEl = $('log'), titleEl = $('title'), toastEl = $('toast');
   var toastTimer = null;
-  var DRAFT_ID = 'main';
+  var DRAFT_ID = '7d5f3a52-6a1c-4e2b-9c61-0a1b2c3d4e5f'; // id bảng PHẢI là UUID (luật chung §6); một dòng nháp cố định
 
   function log(msg) { logEl.textContent = msg + '\n' + logEl.textContent.slice(0, 3000); }
   function toast(msg) {

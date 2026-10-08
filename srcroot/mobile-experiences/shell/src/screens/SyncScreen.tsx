@@ -27,6 +27,10 @@ export function SyncScreen({ nav }: { nav: Nav }) {
     void runtime.markRejectionsSeen();
   }, []);
 
+  const versionOf = (id: string | null) => {
+    const a = id ? rt.apps.find((x) => x.app_id === id) : undefined;
+    return a ? (a.pending_version ?? a.current_version) : null;
+  };
   const nameOf = (id: string | null) => (id ? (rt.apps.find((a) => a.app_id === id)?.name ?? id) : 'Hệ thống');
   const offline = rt.sync.state === 'offline';
 
@@ -68,10 +72,10 @@ export function SyncScreen({ nav }: { nav: Nav }) {
               return (
                 <ListRow
                   key={r.id}
-                  title={rejectionTitle(r, nameOf(r.app))}
-                  subtitle={`${r.code} · ${formatWhen(r.createdAt)}${r.detail ? ` · ${r.detail}` : ''}`}
+                  title={rejectionTitle(r, nameOf(r.app), versionOf(r.app))}
+                  subtitle={`${errorSentence(r.code)} (${r.code}) · ${formatWhen(r.createdAt)}${r.detail ? ` · ${r.detail}` : ''}`}
                   onPress={() => setOpen(expanded ? null : r.id)}
-                  accessibilityLabel={`${rejectionTitle(r, nameOf(r.app))}. ${errorSentence(r.code)}. ${expanded ? 'Đang mở chi tiết' : 'Chạm để xem chi tiết'}`}
+                  accessibilityLabel={`${rejectionTitle(r, nameOf(r.app), versionOf(r.app))}. ${errorSentence(r.code)}. ${expanded ? 'Đang mở chi tiết' : 'Chạm để xem chi tiết'}`}
                 >
                   {expanded ? (
                     <View style={styles.json}>

@@ -42,12 +42,12 @@ describe('scopeLines', () => {
     expect(l).toContain('Lưu dữ liệu riêng của app');
     expect(l).toContain('Thông báo');
     expect(l).toContain('Mạng tới vnexpress.net');
-    expect(l).toContain('Thẻ dùng chung (đọc và ghi)');
+    expect(l).toContain('Thẻ (nhãn) dùng chung giữa các app (đọc và ghi)');
   });
   it('db và db.own gộp một dòng; read+write gộp thành đọc và ghi', () => {
     expect(scopeLines(['db', 'db.own'], [])).toEqual(['Lưu dữ liệu riêng của app']);
-    expect(scopeLines(['core.tags:read', 'core.tags:write'], [])).toEqual(['Thẻ dùng chung (đọc và ghi)']);
-    expect(scopeLines(['core.contacts:read'], [])).toEqual(['Danh bạ dùng chung (chỉ đọc)']);
+    expect(scopeLines(['core.tags:read', 'core.tags:write'], [])).toEqual(['Thẻ (nhãn) dùng chung giữa các app (đọc và ghi)']);
+    expect(scopeLines(['core.contacts:read'], [])).toEqual(['Danh bạ dùng chung giữa các app (chỉ đọc)']);
   });
   it('net không khai host vẫn có dòng; scope lạ giữ nguyên chữ', () => {
     expect(scopeLines(['net'], [])).toEqual(['Truy cập mạng']);

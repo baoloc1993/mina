@@ -18,10 +18,13 @@ interface Props {
   onPress(): void;
   onInstall(): void;
   onOpen(): void;
+  /** Vừa bấm Cài/Cập nhật, tiến trình thật chưa về: hiện "Đang cài…" ngay. */
+  starting?: boolean;
 }
 
-export function AppCard({ item, progress, fromCache, onPress, onInstall, onOpen }: Props) {
+export function AppCard({ item, progress, fromCache, onPress, onInstall, onOpen, starting }: Props) {
   const state = cardState(item, progress, fromCache);
+  const busyInstall = !!starting && !progress;
   const privateApp = !!item.owner_tenant_id;
   const unsafe = state === 'unsafe';
   return (
@@ -31,7 +34,7 @@ export function AppCard({ item, progress, fromCache, onPress, onInstall, onOpen 
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && { opacity: opacity.pressed }]}
     >
-      <AppIcon appId={item.id} name={item.name} size={iconCard} privateApp={privateApp} iconUri={iconUriOf(item.local)} />
+      <AppIcon appId={item.id} name={item.name} size={iconCard} privateApp={privateApp} iconUri={iconUriOf(item.local)} style={styles.top} />
       <View style={styles.meta}>
         <View style={styles.nameRow}>
           <Txt size="lg" weight="title" tone={unsafe ? 'danger' : 'text'} style={styles.name}>
@@ -81,7 +84,12 @@ export function AppCard({ item, progress, fromCache, onPress, onInstall, onOpen 
               </Txt>
             </>
           ) : state === 'installed' ? (
-            <Button title="Đã cài · Mở" variant="secondary" compact onPress={onOpen} />
+            <View style={styles.inline}>
+              <Txt size="sm" weight="label" tone="success">
+                Đã cài
+              </Txt>
+              <Button title="Mở" variant="secondary" compact onPress={onOpen} />
+            </View>
           ) : state === 'pending-update' ? (
             <>
               <Button title="Mở" variant="secondary" compact onPress={onOpen} />
@@ -90,21 +98,26 @@ export function AppCard({ item, progress, fromCache, onPress, onInstall, onOpen 
               </Txt>
             </>
           ) : state === 'update' ? (
-            <Button title="Cập nhật" compact onPress={onInstall} />
+            <Button title="Cập nhật" busy={busyInstall} busyTitle="Đang cập nhật…" compact onPress={onInstall} />
           ) : (
-            <Button title={state === 'removed' ? 'Cài lại' : 'Cài'} compact onPress={onInstall} />
+            <Button title={state === 'removed' ? 'Cài lại' : 'Cài'} busy={busyInstall} busyTitle="Đang cài…" compact onPress={onInstall} />
           )}
         </View>
       </View>
+      <Txt size="lg" tone="muted" accessibilityElementsHidden importantForAccessibility="no">
+        ›
+      </Txt>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: color.surface, alignItems: 'flex-start' },
+  card: { flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: color.surface, alignItems: 'center' },
   meta: { flex: 1, minWidth: 0, gap: space.xs },
   nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm },
   name: { flexShrink: 1 },
   tag: { borderWidth: stroke.thin, borderColor: color.border, borderRadius: radius.md, paddingHorizontal: space.sm },
+  top: { alignSelf: 'flex-start' },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   act: { marginTop: space.sm, gap: space.xs, alignSelf: 'stretch' },
 });

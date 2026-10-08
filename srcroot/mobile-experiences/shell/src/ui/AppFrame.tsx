@@ -39,10 +39,12 @@ interface FrameProps {
   readOnly?: boolean;
   /** Màn chặn mở phủ lên toàn khung. */
   blocked?: { name: string; message?: string; onClose(): void } | null;
+  /** Splash tức thì từ lúc chạm icon tới khi app sẵn sàng. */
+  splash?: { appId: string; name: string; privateApp?: boolean } | null;
   children?: ReactNode;
 }
 
-export function AppFrame({ readOnly, blocked, children }: FrameProps) {
+export function AppFrame({ readOnly, blocked, splash, children }: FrameProps) {
   return (
     <View style={styles.frame}>
       {readOnly ? (
@@ -51,6 +53,11 @@ export function AppFrame({ readOnly, blocked, children }: FrameProps) {
         </View>
       ) : null}
       <View style={styles.frame}>{children}</View>
+      {splash && !blocked ? (
+        <View style={[StyleSheet.absoluteFill, styles.block]}>
+          <AppSplash {...splash} />
+        </View>
+      ) : null}
       {blocked ? (
         <View style={[StyleSheet.absoluteFill, styles.block]}>
           <BlockedOpen {...blocked} />

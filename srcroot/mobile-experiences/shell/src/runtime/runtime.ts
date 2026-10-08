@@ -57,7 +57,7 @@ function initialState(): RuntimeState {
     boot: 'starting', bootError: null, session: null, loginHint: null, online: false, sync: EMPTY_SYNC,
     entitlement: { readOnly: false, graceLeftMs: null, expired: false, reason: 'no-cache' }, plan: null, apps: [],
     catalog: { items: [], fromCache: false, loading: false, error: null, fetchedAt: null },
-    installing: {}, live: [], foreground: null, blockedOpen: null, toasts: [], rejections: [], unseenRejections: 0,
+    installing: {}, live: [], foreground: null, opening: null, blockedOpen: null, toasts: [], rejections: [], unseenRejections: 0,
     pendingChanges: 0, pendingFiles: 0,
   };
 }
@@ -88,6 +88,8 @@ export class RuntimeImpl implements Runtime {
   private toastSeq = 0;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private watchdogBusy = false;
+  private reachable = true;
+  private lastRetry = 0;
   private connected = false;
   private updateTried = new Set<string>();
   private signedOutByUs = false;
@@ -350,7 +352,8 @@ export class RuntimeImpl implements Runtime {
         } else {
           const offline = e instanceof PackageError && e.code === 'OFFLINE';
           this.set({
-            catalog: { ...this.s.catalog, fromCache: !!this.catalogResp, error: this.catalogResp ? null : offline ? 'OFFLINE' : ((e as PackageError).code ?? 'INTERNAL') },
+            // Mất mạng (OFFLINE) khác lỗi máy chủ: lỗi máy chủ giữ mã (INTERNAL…) kể cả khi có bản cache để UI báo đúng + nút Thử lại.
+            catalog: { ...this.s.catalog, fromCache: !!this.catalogResp, error: offline ? (this.catalogResp ? null : 'OFFLINE') : ((e as PackageError).code ?? 'INTERNAL') },
           });
         }
       } finally {
@@ -499,11 +502,21 @@ export class RuntimeImpl implements Runtime {
   // ---------- mở app / vòng đời ----------
   openApp = async (appId: string): Promise<void> => {
     this.openStart.set(appId, Date.now());
-    this.set({ blockedOpen: null });
+    this.set({ blockedOpen: null, opening: appId });
+    try {
+      await this.openAppInner(appId);
+    } finally {
+      this.set({ opening: null });
+    }
+  };
+
+  private openAppInner = async (appId: string): Promise<void> => {
     const alreadyLive = this.live.live.includes(appId);
     if (!alreadyLive) {
       // Biết bản mới / bị thu hồi TRƯỚC khi nạp (đừng chờ quá 2,5 s).
-      if (this.s.online && this.s.session) await Promise.race([this.refreshCatalog(true), sleep(2500)]);
+      // App đang bị thu hồi: có thể đã có bản an toàn mới — chờ tải xong (≤ 20 s) thay vì chỉ 2,5 s.
+      const revoked = this.s.apps.find((a) => a.app_id === appId)?.blocked ?? false;
+      if (this.s.online && this.s.session) await Promise.race([this.refreshCatalog(true), sleep(revoked ? 20_000 : 2500)]);
       try {
         const { row, dir } = await this.pm.prepareOpen(appId);
         this.infos.set(appId, { row, dir, rpc: (req) => handleRpc(req, { manifest: row.manifest, tablePrefix: row.table_prefix, host: this.makeHost(row) }) });
@@ -689,7 +702,7 @@ export class RuntimeImpl implements Runtime {
     if (!this.db || this.s.boot !== 'ready') return;
     try {
       const st = this.db.currentStatus;
-      const connected = !!st?.connected;
+      const connected = !!st?.connected && this.reachable;
       const wasConnected = this.connected;
       this.connected = connected;
       const q = await this.db.getUploadQueueStats();
@@ -760,20 +773,29 @@ export class RuntimeImpl implements Runtime {
     }
   }
 
-  /** Sau khi mạng quay lại, kết nối PowerSync đôi khi treo ~40 s (đo ở vòng 1) — nối lại ngay khi server tới được. */
+  /**
+   * Thăm dò máy chủ mỗi nhịp (≤ 2 s). Kết nối PowerSync kẹt sau khi mất mạng có thể vẫn báo `connected` hàng chục giây
+   * (đo ở dogfood vòng 3: chip kẹt xanh > 100 s khi wifi tắt) — nên "online" = PowerSync nối được VÀ máy chủ tới được.
+   * Mạng quay lại ⇒ nối lại ngay (kết nối cũ có thể đã chết) thay vì chờ ~40 s (đo ở vòng 1).
+   */
   private async watchdog(connected: boolean): Promise<void> {
-    if (connected || this.watchdogBusy || !this.s.session) return;
+    if (this.watchdogBusy || !this.s.session) return;
     this.watchdogBusy = true;
+    const was = this.reachable;
     try {
       const ctl = new AbortController();
       const to = setTimeout(() => ctl.abort(), 2000);
-      const r = await fetch(`${config.powersyncUrl}/probes/liveness`, { signal: ctl.signal });
+      const r = await fetch(`${config.powersyncUrl}/probes/liveness`, { signal: ctl.signal, headers: { connection: 'close' } });
       clearTimeout(to);
-      if (r.ok && !this.db.currentStatus?.connected) await this.retrySync();
+      this.reachable = r.ok;
     } catch {
-      // vẫn offline thật
+      this.reachable = false;
     } finally {
       this.watchdogBusy = false;
+    }
+    if (this.reachable && (!was || !connected) && !this.db.connecting && Date.now() - this.lastRetry > 8000) {
+      this.lastRetry = Date.now();
+      await this.retrySync();
     }
   }
 
@@ -814,7 +836,10 @@ export class RuntimeImpl implements Runtime {
 
   // ---------- thiết bị / tài khoản ----------
   listDevices = async (): Promise<DeviceItem[]> => {
-    const rows = await listDevicesApi();
+    // Lỗi mạng ⇒ mã OFFLINE (không để lộ INTERNAL khi banner cùng màn đã nói OFFLINE).
+    const rows = await listDevicesApi().catch((e) => {
+      throw api.mapRpcError(e as { message?: string }) ?? e;
+    });
     return rows.map((d) => ({
       id: d.id, sessionId: d.session_id, name: d.name ?? 'Thiết bị chưa đặt tên', platform: d.platform, lastSeenAt: d.last_seen_at,
       isThisDevice: d.session_id === this.s.session?.sessionId,
@@ -826,7 +851,7 @@ export class RuntimeImpl implements Runtime {
     if (mine) await this.signOut(true);
   };
   renameThisDevice = async (name: string): Promise<void> => renameApi(name);
-  linkProvider = async (provider: 'google' | 'apple'): Promise<void> => oauth(provider, true);
+  linkProvider = async (provider: 'google' | 'apple'): Promise<boolean> => oauth(provider, true);
 
   // ---------- toast ----------
   pushToast = (t: Omit<ToastItem, 'id'>): void => {

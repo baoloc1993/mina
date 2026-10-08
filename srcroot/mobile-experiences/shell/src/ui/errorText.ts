@@ -10,7 +10,7 @@ const SENTENCES: Record<string, string> = {
   BAD_MANIFEST: 'Thông tin khai báo của app không hợp lệ',
   MIGRATION_NOT_ADDITIVE: 'Bản này đổi cấu trúc dữ liệu theo cách không được phép — đã huỷ',
   MIGRATION_FAILED: 'Không nâng cấp được dữ liệu của app — đã hoàn tác',
-  UPDATE_FAILED: 'Cập nhật thất bại — bản cũ vẫn chạy bình thường',
+  UPDATE_FAILED: 'Không cập nhật được app — bản cũ vẫn chạy',
   APP_REVOKED: 'Bản này đã bị thu hồi — cần mạng để cập nhật bản mới',
   NO_SAFE_VERSION: 'Chưa có bản an toàn để cài',
   PACKAGE_UNAVAILABLE: 'Chưa tải được gói app. Thử lại sau',
@@ -36,7 +36,10 @@ const SENTENCES: Record<string, string> = {
   PERMISSION_DENIED: 'Bạn đã từ chối quyền này',
   APP_SUSPENDED: 'App đang tạm dừng',
   NOT_FOUND: 'Không tìm thấy mục này',
-  FORBIDDEN: 'Thay đổi không thuộc tài khoản này nên bị từ chối',
+  FORBIDDEN: 'Không có quyền ghi',
+  BAD_OP: 'Thay đổi sai định dạng',
+  SCHEMA: 'Dữ liệu không khớp bảng',
+  TABLE_NOT_ALLOWED: 'Bảng không thuộc app nào đã cài',
   INTERNAL: 'Có lỗi không mong muốn. Thử lại sau',
 };
 

@@ -94,6 +94,8 @@ export interface RuntimeState {
   /** App có WebView đang sống (tối đa 3), cũ nhất trước; `foreground` là app đang hiện ở S5 (null ⇒ đang ở launcher). */
   live: string[];
   foreground: string | null;
+  /** App vừa được chạm mở và đang được chuẩn bị (kiểm catalog, hoán đổi bản mới) — UI vẽ splash "Đang mở…" ngay. */
+  opening: string | null;
   /** Tên app đang bị chặn mở (APP_REVOKED) nếu người dùng vừa thử mở. */
   blockedOpen: { appId: string; name: string; message: string } | null;
   toasts: ToastItem[];
@@ -142,7 +144,8 @@ export interface Runtime {
   /** Thu hồi một thiết bị; thu hồi chính máy này = đăng xuất. */
   revokeDevice(id: string): Promise<void>;
   renameThisDevice(name: string): Promise<void>;
-  linkProvider(provider: 'google' | 'apple'): Promise<void>;
+  /** `true` = đã liên kết; `false` = người dùng đóng trình duyệt giữa chừng (UI không báo thành công). Lỗi ⇒ ném (PROVIDER_UNAVAILABLE…). */
+  linkProvider(provider: 'google' | 'apple'): Promise<boolean>;
 
   // ----- toast -----
   pushToast(t: Omit<ToastItem, 'id'>): void;

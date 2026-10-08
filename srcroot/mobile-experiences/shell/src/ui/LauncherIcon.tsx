@@ -25,7 +25,7 @@ export function LauncherIcon({ app, dragging, handlers }: { app: LauncherApp; dr
       onLongPress={handlers.onLongPress}
       onPressOut={handlers.onPressOut}
       delayLongPress={handlers.delayLongPress}
-      style={styles.cell}
+      style={({ pressed }) => [styles.cell, pressed && !dragging && { opacity: opacity.pressed }]}
     >
       <View style={[styles.iconWrap, dragging && styles.dragging]}>
         <AppIcon

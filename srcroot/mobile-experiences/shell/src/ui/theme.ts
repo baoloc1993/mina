@@ -36,7 +36,7 @@ export const lineHeight = (size: number): number => Math.round(size * 1.35);
 
 /** Hằng số hình thức không nằm trong bảng token nhưng suy từ token / quy ước DS. */
 export const stroke = { thin: 1, focus: 2, accent: 4 } as const;
-export const opacity = { disabled: 0.4, overlay: 0.45, faint: 0.5, dim: 0.4, pressed: 0.8 } as const;
+export const opacity = { disabled: 0.4, overlay: 0.45, faint: 0.5, dim: 0.4, pressed: 0.6 } as const;
 export const glyphBig = space.xl + space.md; // 56 — icon lớn của khuôn rỗng / lỗi
 export const iconCard = glyphBig; // 56 — icon trong thẻ catalog
 export const chipHeight = space.xl - space.sm; // 32

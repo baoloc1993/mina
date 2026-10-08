@@ -15,7 +15,7 @@ import { Txt } from '../ui/Txt';
 import { errorFrom } from '../ui/errorText';
 import { space, tapMin } from '../ui/theme';
 import type { Nav } from './nav';
-import { readOnlyBannerText } from './text';
+import { readOnlyBannerText, rejectionBannerText } from './text';
 
 export function LauncherScreen({ nav }: { nav: Nav }) {
   const rt = useRuntime();
@@ -58,7 +58,7 @@ export function LauncherScreen({ nav }: { nav: Nav }) {
           <Banner tone="warning" text={readOnlyBannerText(rt.entitlement.reason)} actionLabel="Xem" onAction={() => nav.push({ name: 'account' })} />
         ) : null}
         {rejected > 0 ? (
-          <Banner tone="error" text={`${rejected} thay đổi bị từ chối khi đồng bộ`} actionLabel="Xem" onAction={() => nav.push({ name: 'sync' })} />
+          <Banner tone="error" text={rejectionBannerText(rejected, rt.rejections)} actionLabel="Xem" onAction={() => nav.push({ name: 'sync' })} />
         ) : null}
         {updated.map((a) => (
           <Banner

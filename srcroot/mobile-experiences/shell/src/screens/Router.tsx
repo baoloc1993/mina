@@ -63,6 +63,14 @@ export function Router() {
     [],
   );
 
+  // Mở mini app (từ bất kỳ màn nào) rồi ×/BACK ⇒ về launcher theo prototype: đặt lại stack khi foreground null → có giá trị.
+  const fg = rt.foreground;
+  const prevFg = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevFg.current === null && fg !== null) setStack(HOME);
+    prevFg.current = fg;
+  }, [fg]);
+
   // Đăng xuất / hết phiên: về gốc để lần đăng nhập sau bắt đầu từ launcher.
   useEffect(() => {
     if (!signedIn) setStack(HOME);
@@ -77,6 +85,7 @@ export function Router() {
         runtime.dismissBlockedOpen();
         return true;
       }
+      if (s.opening && !s.foreground) return true; // đang chuẩn bị mở: nuốt BACK, tránh lệch trạng thái
       if (s.foreground) {
         runtime.closeForeground();
         return true;
@@ -98,7 +107,7 @@ export function Router() {
     body = <LoginScreen />;
   } else {
     const top = stack[stack.length - 1];
-    const showApp = rt.foreground !== null || rt.blockedOpen !== null;
+    const showApp = rt.foreground !== null || rt.blockedOpen !== null || rt.opening !== null;
     let screen: React.ReactNode;
     switch (top.name) {
       case 'catalog':
@@ -121,7 +130,9 @@ export function Router() {
     }
     body = (
       <>
-        {screen}
+        <View style={styles.flex} importantForAccessibility={showApp ? 'no-hide-descendants' : 'auto'} accessibilityElementsHidden={showApp}>
+          {screen}
+        </View>
         <View
           style={[StyleSheet.absoluteFill, showApp ? styles.appOn : styles.appOff]}
           pointerEvents={showApp ? 'auto' : 'none'}
@@ -142,6 +153,7 @@ export function Router() {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   root: { flex: 1, backgroundColor: color.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.lg },
   appOn: { display: 'flex', backgroundColor: color.bg },

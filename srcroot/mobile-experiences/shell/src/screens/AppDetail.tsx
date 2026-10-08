@@ -34,6 +34,7 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
   const [dlgErr, setDlgErr] = useState<string | null>(null);
   const [purged, setPurged] = useState(0);
   const [dlgBusy, runDlg] = useBusy();
+  const [starting, setStarting] = useState(false);
 
   if (!item && !la) {
     return (
@@ -56,14 +57,20 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
   const privateApp = !!item?.owner_tenant_id || !!la?.private_to_tenant;
   const running = la?.current_version ?? null;
   const offerVersion = item?.version ?? null;
+  const offline = !rt.online;
+  const isLive = rt.live.includes(appId);
+  const busyInstall = starting && !progress;
   const revoked = !!la && (la.status === 'revoked' || la.blocked);
 
   const toastErr = (e: unknown) => runtime.pushToast({ kind: 'error', text: errorFrom(e) });
   const install = async () => {
+    setStarting(true);
     try {
       await runtime.install(appId);
     } catch (e) {
       if (!runtime.getState().installing[appId]?.error) toastErr(e);
+    } finally {
+      setStarting(false);
     }
   };
   const open = () => {
@@ -112,8 +119,8 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
               {name}
             </Txt>
             <Txt size="sm" tone="muted">
-              {installed ? `Đang chạy bản ${running}` : offerVersion ? `Bản ${offerVersion}` : 'Chưa có bản để cài'}
-              {removed ? ' · đã gỡ' : ''}
+              {installed ? (isLive ? `Đang chạy bản ${running}` : `Đã cài · bản ${running}`) : offerVersion ? `Bản ${offerVersion}` : 'Chưa có bản để cài'}
+              {removed && !progress && !starting ? ' · đã gỡ' : ''}
               {privateApp ? ' · riêng của bạn' : ''}
             </Txt>
             {la?.pending_version ? (
@@ -146,7 +153,12 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
           <>
             <Button title="Mở" onPress={open} testID="detail-open" />
             {item?.action === 'update' && !la?.pending_version ? (
-              <Button title={`Cập nhật lên bản ${offerVersion ?? 'mới'}`} variant="secondary" disabled={rt.catalog.fromCache} onPress={() => void install()} />
+              <Button title={`Cập nhật lên bản ${offerVersion ?? 'mới'}`} variant="secondary" busy={busyInstall} busyTitle="Đang cập nhật…" disabled={offline || rt.catalog.fromCache} onPress={() => void install()} />
+            ) : null}
+            {item?.action === 'update' && !la?.pending_version && (offline || rt.catalog.fromCache) ? (
+              <Txt size="sm" tone="warning">
+                Cần mạng để cài
+              </Txt>
             ) : null}
             <Button title="Gỡ (giữ dữ liệu)" variant="secondary" onPress={() => setDlg('uninstall')} testID="detail-uninstall" />
           </>
@@ -154,7 +166,9 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
           <>
             <Button
               title={removed ? 'Cài lại' : 'Cài'}
-              disabled={state === 'unsafe' || state === 'quota' || state === 'cache-offline'}
+              busy={busyInstall}
+              busyTitle="Đang cài…"
+              disabled={offline || state === 'unsafe' || state === 'quota' || state === 'cache-offline'}
               onPress={() => void install()}
               testID="detail-install"
             />
@@ -163,18 +177,23 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
                 {errorSentence(item?.code === 'PACKAGE_UNAVAILABLE' ? 'PACKAGE_UNAVAILABLE' : 'NO_SAFE_VERSION')} ({item?.code === 'PACKAGE_UNAVAILABLE' ? 'PACKAGE_UNAVAILABLE' : 'NO_SAFE_VERSION'})
               </Txt>
             ) : null}
+            {offline || state === 'cache-offline' ? (
+              <Txt size="sm" tone="warning">
+                Cần mạng để cài
+              </Txt>
+            ) : null}
             {state === 'quota' ? (
               <Txt size="sm" tone="warning">
                 {errorSentence('QUOTA_EXCEEDED')} (QUOTA_EXCEEDED)
               </Txt>
             ) : null}
             {removed ? (
-              <>
-                <Button title="Xoá hẳn dữ liệu" variant="danger" onPress={() => setDlg('purge')} testID="detail-purge" />
+              <View style={styles.purge}>
+                <Button title="Xoá hẳn dữ liệu" variant="dangerOutline" onPress={() => setDlg('purge')} testID="detail-purge" />
                 <Txt size="sm" tone="muted">
                   Dữ liệu vẫn còn trên máy chủ — cài lại sẽ thấy đủ. Xoá hẳn thì không lấy lại được.
                 </Txt>
-              </>
+              </View>
             ) : null}
           </>
         )}
@@ -198,8 +217,8 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
 
       <ConfirmDialog
         visible={dlg === 'uninstall'}
-        title={`Gỡ ${name}?`}
-        message="Icon và gói sẽ bị xoá khỏi máy. Dữ liệu vẫn giữ trên máy chủ để cài lại."
+        title={`Gỡ ${name} khỏi máy này?`}
+        message="Dữ liệu vẫn còn trên máy chủ, cài lại là thấy đủ."
         notice={offlineNote}
         error={dlgErr}
         confirmLabel="Gỡ"
@@ -228,5 +247,6 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
 
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: color.surface, alignItems: 'center' },
+  purge: { gap: space.sm, marginTop: space.lg },
   headText: { flex: 1, gap: space.xs },
 });

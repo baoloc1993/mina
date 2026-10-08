@@ -33,7 +33,8 @@ export class ProviderUnavailable extends Error {
 }
 
 /** Đăng nhập / liên kết qua trình duyệt hệ thống. Local không có OAuth client ⇒ PROVIDER_UNAVAILABLE (không phải AC). */
-export async function oauth(provider: Provider, link = false): Promise<void> {
+/** Trả `true` khi hoàn tất; `false` khi người dùng đóng trình duyệt giữa chừng (không phải lỗi, không được báo thành công). */
+export async function oauth(provider: Provider, link = false): Promise<boolean> {
   const redirectTo = 'minashell://auth-callback';
   const res = link
     ? await supabase.auth.linkIdentity({ provider, options: { redirectTo, skipBrowserRedirect: true } })
@@ -43,12 +44,12 @@ export async function oauth(provider: Provider, link = false): Promise<void> {
   const probe = await fetch(res.data.url, { redirect: 'manual' }).catch(() => null);
   if (!probe || probe.status >= 400) throw new ProviderUnavailable('Nhà cung cấp chưa được cấu hình');
   const r = await WebBrowser.openAuthSessionAsync(res.data.url, redirectTo);
-  if (r.type !== 'success') return;
+  if (r.type !== 'success') return false;
   const code = new URL(r.url).searchParams.get('code');
-  if (code) {
-    const ex = await supabase.auth.exchangeCodeForSession(code);
-    if (ex.error) throw ex.error;
-  }
+  if (!code) return false;
+  const ex = await supabase.auth.exchangeCodeForSession(code);
+  if (ex.error) throw ex.error;
+  return true;
 }
 
 export function tenantIdOf(accessToken: string): string | null {

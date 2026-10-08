@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type Vi
 import { Txt, toneColor, type Tone } from './Txt';
 import { color, opacity, radius, space, stroke, tapMin } from './theme';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerOutline' | 'ghost';
 
 interface Props {
   title: string;
@@ -26,6 +26,7 @@ const VARIANT: Record<ButtonVariant, { bg: string; fg: Tone; border: string }> =
   primary: { bg: color.primary, fg: 'onPrimary', border: color.primary },
   secondary: { bg: color.bg, fg: 'primary', border: color.border },
   danger: { bg: color.danger, fg: 'onPrimary', border: color.danger },
+  dangerOutline: { bg: color.bg, fg: 'danger', border: color.danger },
   ghost: { bg: 'transparent', fg: 'primary', border: 'transparent' },
 };
 

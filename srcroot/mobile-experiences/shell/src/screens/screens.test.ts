@@ -1,5 +1,5 @@
 import { popRoute, pushRoute, type Route } from './nav';
-import { planLine, readOnlyBannerText, rejectionTitle } from './text';
+import { planLine, readOnlyBannerText, rejectionBannerText, rejectionTitle } from './text';
 import { cardState } from '../ui/cardState';
 import type { CatalogItem } from '../runtime/types';
 
@@ -27,9 +27,9 @@ describe('nav', () => {
 
 describe('text', () => {
   it('planLine', () => {
-    expect(planLine({ plan: 'mvp-unlimited', max_apps: null, until: null })).toBe('Gói: mvp-unlimited — không giới hạn app');
-    expect(planLine({ plan: 'free', max_apps: 2, until: null })).toBe('Gói: free — tối đa 2 app');
-    expect(planLine(null)).toContain('chưa xác minh');
+    expect(planLine({ plan: 'mvp-unlimited', max_apps: null, until: null })).toBe('Không giới hạn app');
+    expect(planLine({ plan: 'free', max_apps: 2, until: null })).toBe('Tối đa 2 app');
+    expect(planLine(null)).toContain('Chưa xác minh');
   });
   it('readOnlyBannerText, rejectionTitle', () => {
     expect(readOnlyBannerText('grace-over')).toContain('quá ân hạn');
@@ -37,6 +37,9 @@ describe('text', () => {
     const r = { id: '1', source: 'server', app: 'x', table: 'app_hello_items', op: 'PATCH', code: 'FORBIDDEN', detail: null, data: null, createdAt: '' } as const;
     expect(rejectionTitle(r, 'Hello')).toBe('Hello · app_hello_items · PATCH');
     expect(rejectionTitle({ ...r, table: null, op: null }, 'Hello')).toBe('Hello');
+    expect(rejectionTitle({ ...r, source: 'local' }, 'Hello', '0.3.0')).toBe('Hello · cập nhật 0.3.0');
+    expect(rejectionBannerText(1, [{ ...r, source: 'local' }])).toBe('1 app không cập nhật được');
+    expect(rejectionBannerText(2, [r])).toBe('2 thay đổi bị từ chối khi đồng bộ');
   });
 });
 

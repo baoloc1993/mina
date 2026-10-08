@@ -120,9 +120,9 @@ export function LoginScreen() {
       setProviderName(p);
       setOauthErr(null);
       try {
-        await oauth(p);
+        const done = await oauth(p);
         setOffline(false);
-        await afterAuth();
+        if (done) await afterAuth();
       } catch (e) {
         noteNetwork(e);
         setOauthErr(
