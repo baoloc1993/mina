@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mina — prototype shell (vòng 3)</title>
+<style>
+/* Token: bản sao đúng DESIGN-SYSTEM.md §2 — nơi DUY NHẤT có giá trị thật */
+:root {
+  --color-bg: #FFFFFF;
+  --color-surface: #F2F4F7;
+  --color-text: #111318;
+  --color-text-muted: #5B6472;
+  --color-primary: #0A5BD3;
+  --color-on-primary: #FFFFFF;
+  --color-border: #6F7886;
+  --color-danger: #C62828;
+  --color-success: #1B7A3E;
+  --color-warning: #8A5200;
+  --color-overlay: #111318;
+  --font-sans: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow: 0 2px 8px rgba(17,19,24,.08);
+  --tap-min: 48px;
+  --icon-app: 64px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; font-family: var(--font-sans); font-size: var(--text-base); color: var(--color-text); background: var(--color-surface); }
+a { color: var(--color-primary); }
+button { font: inherit; cursor: pointer; }
+
+/* Trang: khung điện thoại + thanh giả lập */
+.page { display: flex; gap: var(--space-lg); justify-content: center; align-items: flex-start; padding: var(--space-lg); flex-wrap: wrap; }
+.phone { width: 360px; height: 800px; background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; position: relative; display: flex; flex-direction: column; border: 1px solid var(--color-border); }
+.sim { width: 320px; background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--space-md); font-size: var(--text-sm); }
+.sim h2 { font-size: var(--text-lg); margin: 0 0 var(--space-sm); }
+.sim label { display: flex; align-items: center; gap: var(--space-sm); min-height: 36px; }
+.sim fieldset { border: 1px solid var(--color-border); border-radius: var(--radius-md); margin: 0 0 var(--space-sm); padding: var(--space-sm) var(--space-md); }
+.sim legend { color: var(--color-text-muted); padding: 0 var(--space-xs); }
+.sim .nav { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.sim .nav a { padding: var(--space-xs) var(--space-sm); border: 1px solid var(--color-border); border-radius: var(--radius-md); text-decoration: none; font-size: var(--text-sm); }
+.sim .nav a.on { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+@media (max-width: 600px) {
+  .page { padding: 0; gap: 0; }
+  .phone { width: 100%; height: 100vh; border-radius: 0; border: 0; }
+  .sim { width: 100%; border-radius: 0; }
+}
+
+/* C7 thanh tiêu đề */
+.bar { display: flex; align-items: center; gap: var(--space-sm); min-height: 56px; padding: 0 var(--space-md); background: var(--color-bg); }
+.bar .title { font-size: var(--text-xl); font-weight: 700; flex: 1; }
+.bar .title.small { font-size: var(--text-lg); }
+.bar .back, .bar .iconbtn { min-width: var(--tap-min); min-height: var(--tap-min); border: 0; background: transparent; color: var(--color-primary); font-size: var(--text-lg); border-radius: var(--radius-md); }
+.body { flex: 1; overflow: auto; padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
+.muted { color: var(--color-text-muted); font-size: var(--text-sm); }
+h3 { margin: 0; font-size: var(--text-lg); }
+
+/* C1 / C2 nút */
+.btn { min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); }
+.btn.sec { background: var(--color-bg); color: var(--color-primary); border: 1px solid var(--color-border); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-primary); }
+.btn.ghost { background: transparent; color: var(--color-primary); width: auto; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.btn.busy::before { content: ""; width: 18px; height: 18px; border: 2px solid var(--color-on-primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+.btn.sec.busy::before { border-color: var(--color-primary); border-top-color: transparent; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.row { display: flex; gap: var(--space-sm); }
+.row .btn { width: auto; flex: 1; }
+
+/* C3 ô nhập */
+.field { display: flex; flex-direction: column; gap: var(--space-xs); }
+.field label { font-size: var(--text-sm); font-weight: 600; }
+.input { min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); font-size: var(--text-base); color: var(--color-text); }
+.input.err { border-color: var(--color-danger); }
+.field .errtxt { color: var(--color-danger); font-size: var(--text-sm); }
+
+/* C4 thẻ app · C5 icon · C6 chip · C8 banner · C9 hộp thoại · C10 toast · C11 hàng · C12 tiến trình · C13 khuôn · C14 khung app */
+.card { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-md); display: flex; gap: var(--space-md); align-items: flex-start; }
+.card .ic { width: 56px; height: 56px; border-radius: var(--radius-md); background: var(--color-primary); color: var(--color-on-primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-lg); flex: none; }
+.card .ic.alt { background: var(--color-success); }
+.card .ic.priv { background: var(--color-warning); }
+.card .meta { flex: 1; min-width: 0; }
+.card .name { font-size: var(--text-lg); font-weight: 700; display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; }
+.tag { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0 var(--space-sm); }
+.card .act { margin-top: var(--space-sm); }
+.card .act .btn { width: auto; min-height: 40px; }
+.card.danger-state .name { color: var(--color-danger); }
+
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-md) var(--space-sm); row-gap: var(--space-xl); }
+.app { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); background: transparent; border: 0; min-height: var(--tap-min); color: var(--color-text); position: relative; }
+.app .ic { width: var(--icon-app); height: var(--icon-app); border-radius: var(--radius-lg); background: var(--color-primary); color: var(--color-on-primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-xl); }
+.app .ic.alt { background: var(--color-success); }
+.app .ic.priv { background: var(--color-warning); }
+.app .lbl { font-size: var(--text-sm); }
+.app.drag .ic { box-shadow: var(--shadow); transform: scale(1.05); outline: 2px solid var(--color-primary); }
+.app.update::after { content: ""; position: absolute; top: 0; right: 10px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-primary); border: 2px solid var(--color-bg); }
+.app.revoked .ic { opacity: .4; }
+.app.revoked .lbl { text-decoration: line-through; color: var(--color-text-muted); }
+.app .mv { position: absolute; bottom: -22px; display: flex; gap: var(--space-xs); }
+.app .mv button { min-width: 28px; height: 22px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-primary); font-size: var(--text-sm); }
+
+.chip { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 32px; padding: 0 var(--space-sm); border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: var(--text-sm); font-weight: 600; background: var(--color-bg); white-space: nowrap; }
+.chip.ok { color: var(--color-success); }
+.chip.busy { color: var(--color-primary); }
+.chip.off { color: var(--color-warning); }
+.chip.bad { color: var(--color-danger); }
+.chip .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.chip.busy .dot { animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+
+.banner { display: flex; gap: var(--space-sm); align-items: center; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--color-surface); border-left: 4px solid var(--color-primary); font-size: var(--text-sm); }
+.banner.warn { border-left-color: var(--color-warning); color: var(--color-warning); }
+.banner.err { border-left-color: var(--color-danger); color: var(--color-danger); }
+.banner.info { color: var(--color-primary); }
+.banner .btn { width: auto; min-height: 36px; padding: 0 var(--space-sm); font-size: var(--text-sm); }
+.banner span { flex: 1; }
+
+.list { display: flex; flex-direction: column; background: var(--color-surface); border-radius: var(--radius-lg); overflow: hidden; }
+.item { display: flex; align-items: center; gap: var(--space-md); min-height: var(--tap-min); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); background: transparent; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left; color: var(--color-text); font: inherit; }
+.item:last-child { border-bottom: 0; }
+.item .t { flex: 1; min-width: 0; }
+.item .t b { display: block; }
+.item .t small { color: var(--color-text-muted); font-size: var(--text-sm); }
+.item .chev { color: var(--color-text-muted); }
+.item .btn { width: auto; min-height: 36px; font-size: var(--text-sm); padding: 0 var(--space-sm); }
+
+.prog { display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--text-sm); }
+.prog .track { height: 8px; border-radius: var(--radius-md); background: var(--color-bg); border: 1px solid var(--color-border); overflow: hidden; }
+.prog .fill { height: 100%; background: var(--color-primary); width: 0; transition: width .4s; }
+.prog .step { color: var(--color-text-muted); }
+.prog.err .step { color: var(--color-danger); }
+
+.empty { text-align: center; padding: var(--space-xl) var(--space-md); display: flex; flex-direction: column; align-items: center; gap: var(--space-md); color: var(--color-text-muted); }
+.empty .big { font-size: 56px; line-height: 1; opacity: .5; }
+.empty .btn { width: auto; }
+.empty.err { color: var(--color-danger); }
+.empty code { font-size: var(--text-sm); }
+.skel { display: flex; flex-direction: column; gap: var(--space-md); }
+.skel div { height: 88px; border-radius: var(--radius-lg); background: var(--color-surface); animation: blink 1.2s infinite; }
+
+.host { flex: 1; display: flex; flex-direction: column; background: var(--color-bg); position: relative; }
+.host .wv { flex: 1; padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); overflow: auto; }
+.host .splash { position: absolute; inset: 0; background: var(--color-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); color: var(--color-text-muted); }
+.host .splash .ic { width: var(--icon-app); height: var(--icon-app); border-radius: var(--radius-lg); background: var(--color-primary); color: var(--color-on-primary); display: flex; align-items: center; justify-content: center; font-size: var(--text-xl); font-weight: 700; }
+.host .block { position: absolute; inset: 0; background: var(--color-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); padding: var(--space-lg); text-align: center; color: var(--color-danger); }
+.mini { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mini .btn { min-height: 40px; }
+.mini ul { margin: 0; padding-left: var(--space-lg); }
+.lives { font-size: var(--text-sm); color: var(--color-text-muted); display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; }
+.lives .chip { min-height: 26px; }
+
+.toast { position: absolute; left: var(--space-md); right: var(--space-md); bottom: var(--space-lg); background: var(--color-text); color: var(--color-on-primary); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); display: none; align-items: center; gap: var(--space-sm); box-shadow: var(--shadow); font-size: var(--text-sm); z-index: 5; }
+.toast.show { display: flex; }
+.toast span { flex: 1; }
+.toast .btn { width: auto; min-height: 36px; background: var(--color-on-primary); color: var(--color-text); font-size: var(--text-sm); }
+.toast.err { background: var(--color-danger); }
+
+.overlay { position: absolute; inset: 0; background: var(--color-overlay); opacity: .45; display: none; z-index: 8; }
+.dialog { position: absolute; left: var(--space-md); right: var(--space-md); top: 50%; transform: translateY(-50%); background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--space-lg); display: none; flex-direction: column; gap: var(--space-md); z-index: 9; }
+.phone.modal .overlay, .phone.modal .dialog { display: flex; }
+.dialog h3 { font-size: var(--text-lg); }
+.sys { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }
+.sys h4 { margin: 0; font-size: var(--text-base); }
+
+/* S10 mock console */
+.console { width: 100%; max-width: 980px; background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: none; flex-direction: column; min-height: 600px; border: 1px solid var(--color-border); }
+.console.show { display: flex; }
+.console .top { display: flex; gap: var(--space-sm); align-items: center; padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
+.console .cols { display: flex; flex: 1; }
+.console .left { width: 360px; border-right: 1px solid var(--color-border); padding: var(--space-md); }
+.console .right { flex: 1; padding: var(--space-md); font-size: var(--text-sm); overflow: auto; }
+.log { display: flex; flex-direction: column; gap: var(--space-xs); }
+.log div { display: grid; grid-template-columns: 70px 1.4fr 1fr 1fr; gap: var(--space-sm); padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-md); background: var(--color-surface); }
+.log .ok { color: var(--color-success); font-weight: 600; }
+.log .bad { color: var(--color-danger); font-weight: 600; }
+.log .wait { color: var(--color-text-muted); }
+@media (max-width: 760px) { .console .cols { flex-direction: column; } .console .left { width: 100%; border-right: 0; border-bottom: 1px solid var(--color-border); } }
+
+.screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+.screen.on { display: flex; }
+.hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ===== KHUNG ĐIỆN THOẠI 360×800 ===== -->
+<div class="phone" id="phone">
+
+  <!-- S1 Đăng nhập -->
+  <section class="screen" id="S1" data-screen="S1">
+    <div class="body" style="justify-content:center">
+      <div style="text-align:center">
+        <div style="font-size:var(--text-xl);font-weight:700">Mina</div>
+        <div class="muted">Các app của riêng bạn</div>
+      </div>
+      <div class="banner warn hide" data-off><span>Đang offline — cần mạng để đăng nhập</span></div>
+      <div id="s1-step1">
+        <div class="field"><label>Email</label><input class="input" value="a@test.local"></div>
+        <div style="height:var(--space-md)"></div>
+        <button class="btn" onclick="s1send(this)">Gửi mã</button>
+      </div>
+      <div id="s1-step2" class="hide">
+        <div class="field"><label>Mã 6 số đã gửi tới a@test.local</label><input class="input" id="otp" inputmode="numeric" placeholder="••••••"><div class="errtxt hide" id="otp-err">Mã không đúng hoặc đã hết hạn (OTP_INVALID)</div></div>
+        <div style="height:var(--space-md)"></div>
+        <button class="btn" onclick="s1login(this)">Đăng nhập</button>
+        <button class="btn ghost" onclick="s1resend(this)">Gửi lại mã</button>
+      </div>
+      <div class="muted" style="text-align:center">hoặc</div>
+      <button class="btn sec" onclick="toast('Google chưa được cấu hình trên máy này (PROVIDER_UNAVAILABLE)', true)">Tiếp tục với Google</button>
+      <button class="btn sec" onclick="toast('Apple chưa được cấu hình trên máy này (PROVIDER_UNAVAILABLE)', true)">Tiếp tục với Apple</button>
+    </div>
+  </section>
+
+  <!-- S2 Launcher -->
+  <section class="screen" id="S2" data-screen="S2">
+    <div class="bar"><div class="title">Mina</div><span class="chip" data-chip onclick="go('S6')"><span class="dot"></span><span data-chiptxt>Đã đồng bộ</span></span><button class="iconbtn" onclick="go('S8')" aria-label="Tài khoản">◯</button></div>
+    <div class="body">
+      <div class="banner info hide" data-update><span>Hello đã cập nhật lên 0.3.0 ở lần mở này</span></div>
+      <div class="banner warn hide" data-ro><span>Chỉ đọc: gói đã quá ân hạn — cần mạng để xác minh lại</span><button class="btn sec" onclick="go('S8')">Xem</button></div>
+      <div class="banner err hide" data-rej><span>1 thay đổi bị từ chối khi đồng bộ</span><button class="btn sec" onclick="go('S6')">Xem</button></div>
+      <div class="grid" id="grid"></div>
+      <div class="empty hide" id="s2-empty"><div class="big">▦</div><div>Chưa cài app nào</div><button class="btn" onclick="go('S3')">Mở catalog</button></div>
+      <div class="muted" id="s2-hint">Giữ icon để kéo sắp xếp (prototype: dùng ↑ ↓)</div>
+    </div>
+    <div style="padding:var(--space-md)"><button class="btn" onclick="go('S3')">＋ Catalog</button></div>
+  </section>
+
+  <!-- S3 Catalog -->
+  <section class="screen" id="S3" data-screen="S3">
+    <div class="bar"><button class="back" onclick="go('S2')">←</button><div class="title small">Catalog</div><span class="chip" data-chip><span class="dot"></span><span data-chiptxt>Đã đồng bộ</span></span></div>
+    <div class="body" id="s3-body"></div>
+  </section>
+
+  <!-- S4 Chi tiết app -->
+  <section class="screen" id="S4" data-screen="S4">
+    <div class="bar"><button class="back" onclick="go('S3')">←</button><div class="title small" id="s4-title">Hello</div></div>
+    <div class="body" id="s4-body"></div>
+  </section>
+
+  <!-- S5 Mini app host -->
+  <section class="screen" id="S5" data-screen="S5">
+    <div class="bar"><div class="title small" id="s5-title">Hello</div><span class="chip" data-chip><span class="dot"></span><span data-chiptxt>Đã đồng bộ</span></span><button class="iconbtn" onclick="closeApp()" aria-label="Đóng">×</button></div>
+    <div class="banner warn hide" data-ro style="margin:0 var(--space-md)"><span>Chỉ đọc — thay đổi sẽ được giữ và gửi khi xác minh lại</span></div>
+    <div class="host" id="host">
+      <div class="wv" id="wv"></div>
+      <div class="splash" id="splash"><div class="ic">H</div><div>Đang mở…</div></div>
+      <div class="block hide" id="block"><div style="font-size:var(--text-xl)">⛔</div><div><b>Bản này đã bị thu hồi</b><br>Cần mạng để cập nhật bản mới.<br><span class="muted">(APP_REVOKED)</span></div><button class="btn sec" style="width:auto" onclick="closeApp()">Đóng</button></div>
+    </div>
+    <div class="lives" style="padding:var(--space-xs) var(--space-md)">App đang sống: <span id="lives"></span></div>
+  </section>
+
+  <!-- S6 Đồng bộ & lỗi -->
+  <section class="screen" id="S6" data-screen="S6">
+    <div class="bar"><button class="back" onclick="go('S2')">←</button><div class="title small">Đồng bộ</div></div>
+    <div class="body" id="s6-body"></div>
+  </section>
+
+  <!-- S7 Thiết bị -->
+  <section class="screen" id="S7" data-screen="S7">
+    <div class="bar"><button class="back" onclick="go('S8')">←</button><div class="title small">Thiết bị</div></div>
+    <div class="body" id="s7-body"></div>
+  </section>
+
+  <!-- S8 Tài khoản -->
+  <section class="screen" id="S8" data-screen="S8">
+    <div class="bar"><button class="back" onclick="go('S2')">←</button><div class="title small">Tài khoản</div></div>
+    <div class="body" id="s8-body"></div>
+  </section>
+
+  <!-- S9 Quyền & dịch vụ native (mô phỏng hộp hệ thống) -->
+  <section class="screen" id="S9" data-screen="S9">
+    <div class="bar"><button class="back" onclick="go('S5')">←</button><div class="title small">Hệ thống (mô phỏng)</div></div>
+    <div class="body">
+      <div class="muted">Ba hộp thoại của Android mà app mẫu kích hoạt từ S5. Prototype chỉ mô phỏng để chốt luồng.</div>
+      <div class="sys"><h4>Cho phép Mina truy cập ảnh?</h4><div class="muted">ui.pickImage — hỏi lần đầu</div><div class="row"><button class="btn sec" onclick="sysDeny()">Từ chối</button><button class="btn" onclick="sysAllow()">Cho phép</button></div></div>
+      <div class="sys"><h4>Chia sẻ qua…</h4><div class="muted">ui.share — share sheet hệ thống</div><div class="row"><button class="btn sec" onclick="go('S5');toast('Đã huỷ chia sẻ (không phải lỗi)')">Huỷ</button><button class="btn" onclick="go('S5');toast('Đã chia sẻ')">Zalo</button></div></div>
+      <div class="sys"><h4>🔔 Hello Lịch · 1 phút trước</h4><div>Nhắc: Mua sữa — 18:00</div><div class="muted">notify.schedule — kêu khi offline, shell đã tắt</div><button class="btn sec" onclick="openApp('cal');toast('Mở từ thông báo · ref: rem-1')">Bấm mở app</button></div>
+    </div>
+  </section>
+
+  <!-- Toast C10 · hộp thoại C9 -->
+  <div class="toast" id="toast"><span id="toast-txt"></span><button class="btn hide" id="toast-btn">Mở</button></div>
+  <div class="overlay" onclick="closeDialog()"></div>
+  <div class="dialog" id="dialog"></div>
+
+  <!-- Thanh điều hướng ảo (chỉ prototype) -->
+  <div style="display:flex;justify-content:center;gap:var(--space-xl);padding:var(--space-xs);border-top:1px solid var(--color-border)">
+    <button class="iconbtn" style="min-width:var(--tap-min);min-height:40px;border:0;background:transparent;color:var(--color-text-muted)" onclick="back()" title="BACK hệ thống">◁</button>
+    <button class="iconbtn" style="min-width:var(--tap-min);min-height:40px;border:0;background:transparent;color:var(--color-text-muted)" onclick="go(state.signedIn?'S2':'S1')" title="Home">○</button>
+  </div>
+</div>
+
+<!-- ===== THANH GIẢ LẬP ===== -->
+<div class="sim">
+  <h2>Giả lập</h2>
+  <fieldset><legend>Màn hình</legend><div class="nav" id="nav"></div></fieldset>
+  <fieldset><legend>Mạng / sync (chip C6)</legend>
+    <label><input type="radio" name="net" value="online" checked onchange="setNet(this.value)"> Online, đã đồng bộ</label>
+    <label><input type="radio" name="net" value="syncing" onchange="setNet(this.value)"> Đang đồng bộ</label>
+    <label><input type="radio" name="net" value="offline" onchange="setNet(this.value)"> Offline</label>
+    <label><input type="radio" name="net" value="error" onchange="setNet(this.value)"> Lỗi: 1 bị từ chối</label>
+  </fieldset>
+  <fieldset><legend>Trạng thái</legend>
+    <label><input type="checkbox" id="sim-clean" onchange="setClean(this.checked)"> DB sạch (chưa cài app, catalog rỗng)</label>
+    <label><input type="checkbox" id="sim-ro" onchange="setRO(this.checked)"> Quá ân hạn → chỉ đọc</label>
+    <label><input type="checkbox" id="sim-update" onchange="setUpdate(this.checked)"> Có bản cập nhật Hello 0.3.0</label>
+    <label><input type="checkbox" id="sim-revoked" onchange="setRevoked(this.checked)"> Bản Hello đang chạy bị thu hồi</label>
+    <label><input type="checkbox" id="sim-nocache" onchange="state.noCache=this.checked;render()"> Chưa từng tải catalog (không cache)</label>
+  </fieldset>
+  <fieldset><legend>Lỗi cài gói (thẻ Hello Lịch)</legend>
+    <select class="input" style="min-height:40px;width:100%" onchange="state.installErr=this.value;render()">
+      <option value="">Không lỗi</option><option value="PACKAGE_TAMPERED">Gói bị sửa (PACKAGE_TAMPERED)</option><option value="UNTRUSTED_KEY">Khoá lạ (UNTRUSTED_KEY)</option><option value="SDK_TOO_OLD">Cần cập nhật shell (SDK_TOO_OLD)</option><option value="QUOTA_EXCEEDED">Hết quota (QUOTA_EXCEEDED)</option>
+    </select>
+  </fieldset>
+  <div class="muted">Prototype chốt IA + hình thức (PROTOTYPE.md §4). Token từ DESIGN-SYSTEM.md §2. Vòng 3 · 2026-10-08.</div>
+  <div style="height:var(--space-sm)"></div>
+  <a href="#S10" class="btn sec" style="text-decoration:none">Mở S10 — Mock SDK console (P4)</a>
+</div>
+
+<!-- ===== S10 MOCK SDK CONSOLE (trình duyệt, P4) ===== -->
+<div class="console" id="S10" data-screen="S10">
+  <div class="top">
+    <b>Mock SDK · fixtures/miniapp-hello</b>
+    <select class="input" style="min-height:36px" id="mock-manifest" onchange="mockRender()"><option value="full">manifest đủ scope</option><option value="dbonly">manifest chỉ db.own</option></select>
+    <select class="input" style="min-height:36px" id="mock-net" onchange="mockRender()"><option value="online">online</option><option value="offline">offline</option><option value="ro">chỉ đọc</option></select>
+    <button class="btn sec" style="width:auto;min-height:36px" onclick="mockMatrix()">Chạy ma trận scope (9 namespace)</button>
+    <button class="btn ghost" onclick="mockLog=[];mockRender()">Xoá log</button>
+    <a href="#S2" class="btn ghost" style="text-decoration:none">← về điện thoại</a>
+  </div>
+  <div class="cols">
+    <div class="left"><div class="mini" id="mock-app"></div></div>
+    <div class="right"><div class="muted" style="margin-bottom:var(--space-sm)">Thời gian · method · scope cần · kết quả</div><div class="log" id="mock-log"></div></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ---------- dữ liệu giả (PRD §7) ----------
+const APPS = {
+  hello: { id: 'vn.app.hello', name: 'Hello', ver: '0.2.0', ic: 'H', cls: '', desc: 'App mẫu: ghi chú nhanh, tag dùng chung, gửi nhắc sang Hello Lịch.', scopes: ['Dữ liệu của app', 'Tag dùng chung (đọc/ghi)', 'Gửi nhắc tới app khác'] },
+  cal:   { id: 'vn.app.hello-cal', name: 'Hello Lịch', ver: '0.1.0', ic: 'L', cls: 'alt', desc: 'App mẫu: nhận nhắc, thông báo đúng giờ, ảnh, chia sẻ, mạng tới vnexpress.net.', scopes: ['Dữ liệu của app', 'Thông báo', 'Ảnh', 'Chia sẻ', 'Mạng tới vnexpress.net', 'Tag dùng chung (đọc)'] },
+  priv:  { id: 'vn.app.private-a', name: 'Riêng của A', ver: '0.1.0', ic: 'A', cls: 'priv', priv: true, desc: 'App làm riêng cho tenant này — không hiện với tenant khác.', scopes: ['Dữ liệu của app'] },
+  hello2:{ id: 'vn.app.hello-b', name: 'Hello B', ver: '0.2.0', ic: 'B', cls: '', desc: 'Bản sao của Hello để thử vòng đời nhiều app (app thứ 4).', scopes: ['Dữ liệu của app'] },
+};
+const state = { screen: 'S1', signedIn: false, net: 'online', ro: false, clean: false, update: false, revoked: false, noCache: false, installErr: '',
+  installed: ['hello'], order: ['hello'], uninstalled: [], progress: {}, lives: [], current: null, appState: { hello: { draft: '' } }, history: [], rejections: 1, devices: [{ n: 'Pixel 7', p: 'Android 14', t: 'đang dùng', me: true }, { n: 'Galaxy A14', p: 'Android 13', t: '2 giờ trước' }], tags: ['việc nhà'], photo: false, matrix: null };
+
+// ---------- điều hướng ----------
+const ORDER = ['S1','S2','S3','S4','S5','S6','S7','S8','S9','S10'];
+function go(s, push = true) {
+  if (s !== 'S10' && !state.signedIn && s !== 'S1') s = 'S1';
+  if (push && state.screen !== s) state.history.push(state.screen);
+  state.screen = s; location.hash = s; render();
+}
+function back() {
+  if (state.screen === 'S5') return closeApp();
+  if (state.screen === 'S1' || state.screen === 'S2') return toast('BACK ở launcher: thoát shell (hệ thống)');
+  const prev = state.history.pop() || 'S2'; go(prev, false);
+}
+window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (ORDER.includes(s) && s !== state.screen) go(s, false); });
+
+// ---------- chip C6 ----------
+const CHIP = { online: ['ok', 'Đã đồng bộ'], syncing: ['busy', 'Đang đồng bộ…'], offline: ['off', 'Offline'], error: ['bad', '1 bị từ chối'] };
+function setNet(v) { state.net = v; render(); }
+function setRO(v) { state.ro = v; render(); }
+function setClean(v) { state.clean = v; state.installed = v ? [] : ['hello']; state.order = [...state.installed]; state.uninstalled = []; render(); }
+function setUpdate(v) { state.update = v; render(); }
+function setRevoked(v) { state.revoked = v; render(); }
+
+// ---------- S1 ----------
+function s1send(b) { if (state.net === 'offline') return toast('Không có mạng (OFFLINE)', true); busy(b, () => { document.getElementById('s1-step1').classList.add('hide'); document.getElementById('s1-step2').classList.remove('hide'); }); }
+function s1resend(b) { toast('Đã gửi lại mã'); }
+function s1login(b) { const v = document.getElementById('otp').value; const err = document.getElementById('otp-err'); const inp = document.getElementById('otp');
+  if (v !== '123456') { err.classList.remove('hide'); inp.classList.add('err'); return; }
+  err.classList.add('hide'); inp.classList.remove('err'); busy(b, () => { state.signedIn = true; state.history = []; go('S2'); toast('Đã đăng ký thiết bị "Pixel 7"'); }); }
+function busy(b, fn) { b.classList.add('busy'); b.disabled = true; setTimeout(() => { b.classList.remove('busy'); b.disabled = false; fn(); }, 700); }
+
+// ---------- S2 ----------
+function renderS2() {
+  const g = document.getElementById('grid'); g.innerHTML = '';
+  const empty = document.getElementById('s2-empty');
+  document.querySelector('#S2 [data-update]').classList.toggle('hide', !state.update);
+  document.querySelector('#S2 [data-rej]').classList.toggle('hide', state.net !== 'error');
+  document.getElementById('s2-hint').classList.toggle('hide', state.order.length < 2);
+  if (!state.order.length) { empty.classList.remove('hide'); return; } empty.classList.add('hide');
+  state.order.forEach((k, i) => {
+    const a = APPS[k]; const b = document.createElement('button'); b.className = 'app' + (state.update && k === 'hello' ? ' update' : '') + (state.revoked && k === 'hello' && state.net === 'offline' ? ' revoked' : '');
+    b.innerHTML = `<div class="ic ${a.cls}">${a.ic}</div><div class="lbl">${a.name}</div>` + (state.order.length > 1 ? `<div class="mv"><button onclick="event.stopPropagation();move(${i},-1)" title="kéo lên">↑</button><button onclick="event.stopPropagation();move(${i},1)" title="kéo xuống">↓</button></div>` : '');
+    b.onclick = () => openApp(k); b.onpointerdown = () => b.classList.add('drag'); b.onpointerup = b.onpointerleave = () => b.classList.remove('drag');
+    g.appendChild(b);
+  });
+}
+function move(i, d) { const j = i + d; if (j < 0 || j >= state.order.length) return; [state.order[i], state.order[j]] = [state.order[j], state.order[i]]; render(); toast(state.net === 'offline' ? 'Đã đổi thứ tự — sẽ đồng bộ khi có mạng' : 'Đã lưu thứ tự (reorder_apps) → máy khác thấy sau sync'); }
+
+// ---------- S3 ----------
+function renderS3() {
+  const b = document.getElementById('s3-body'); b.innerHTML = '';
+  if (state.net === 'offline' && state.noCache) { b.innerHTML = `<div class="empty err"><div class="big">⇅</div><div>Không tải được catalog — đang offline<br><code>(OFFLINE)</code></div><button class="btn sec" onclick="toast('Vẫn offline (OFFLINE)', true)">Thử lại</button></div>`; return; }
+  if (state.net === 'offline') b.innerHTML += `<div class="banner warn"><span>Đang xem bản đã lưu — cần mạng để cài</span></div>`;
+  if (state.net === 'syncing') { b.innerHTML += `<div class="skel"><div></div><div></div><div></div></div>`; return; }
+  if (state.clean) { b.innerHTML += `<div class="empty"><div class="big">▦</div><div>Catalog trống — chưa có app nào được phát hành cho bạn</div></div>`; return; }
+  ['hello', 'cal', 'priv', 'hello2'].forEach(k => {
+    const a = APPS[k]; const inst = state.installed.includes(k); const p = state.progress[k];
+    let act = '', extra = '', cls = '';
+    if (k === 'hello' && state.revoked) { cls = 'danger-state'; extra = `<div class="muted" style="color:var(--color-danger)">Không có bản an toàn (NO_SAFE_VERSION)</div>`; act = `<button class="btn sec" disabled>Cài</button>`; }
+    else if (p) { act = `<div class="prog ${p.err ? 'err' : ''}"><div class="track"><div class="fill" style="width:${p.pct}%"></div></div><div class="step">${p.step}</div>${p.err ? `<button class="btn sec" style="width:auto;min-height:36px" onclick="install('${k}')">Thử lại</button>` : ''}</div>`; }
+    else if (inst) { act = `<button class="btn sec" onclick="openApp('${k}')">${state.update && k === 'hello' ? 'Cập nhật ở lần mở sau · Mở' : 'Đã cài · Mở'}</button>`; }
+    else if (k === 'cal' && state.installErr === 'QUOTA_EXCEEDED') { act = `<button class="btn" disabled>Cài</button><div class="muted" style="color:var(--color-warning)">Gói của bạn đã đủ 2 app chung — nâng gói để cài thêm (QUOTA_EXCEEDED)</div>`; }
+    else { act = `<button class="btn" ${state.net === 'offline' ? 'disabled' : ''} onclick="install('${k}')">Cài</button>`; }
+    b.innerHTML += `<div class="card ${cls}" onclick="if(event.target.tagName!=='BUTTON')openDetail('${k}')"><div class="ic ${a.cls}">${a.ic}</div><div class="meta"><div class="name">${a.name} ${a.priv ? '<span class="tag">riêng của bạn</span>' : ''}</div><div class="muted">${a.desc}</div>${extra}<div class="act">${act}</div></div></div>`;
+  });
+}
+function install(k) {
+  const steps = ['Đang tải gói… 40%', 'Đang xác minh chữ ký…', 'Đang giải nén…', 'Đang chạy migration…'];
+  let i = 0; state.progress[k] = { pct: 10, step: steps[0] }; render();
+  const t = setInterval(() => {
+    i++;
+    if (k === 'cal' && state.installErr && i === 2) { clearInterval(t); const m = { PACKAGE_TAMPERED: 'Gói không khớp chữ ký — đã huỷ, không cài', UNTRUSTED_KEY: 'Khoá ký không nằm trong danh sách tin cậy', SDK_TOO_OLD: 'App cần phiên bản Mina mới hơn — hãy cập nhật Mina' }; state.progress[k] = { pct: 40, step: `${m[state.installErr]} (${state.installErr})`, err: true }; render(); return; }
+    if (i >= steps.length) { clearInterval(t); delete state.progress[k]; state.installed.push(k); state.order.push(k); state.uninstalled = state.uninstalled.filter(x => x !== k); render(); toast(`Đã cài ${APPS[k].name}`); return; }
+    state.progress[k] = { pct: 25 * (i + 1), step: steps[i] }; render();
+  }, 600);
+}
+
+// ---------- S4 ----------
+let detail = 'hello';
+function openDetail(k) { detail = k; go('S4'); }
+function renderS4() {
+  const a = APPS[detail]; const inst = state.installed.includes(detail); const un = state.uninstalled.includes(detail);
+  document.getElementById('s4-title').textContent = a.name;
+  let status = '', main = '';
+  if (detail === 'hello' && state.revoked) status = `<div class="banner err"><span>Bản ${a.ver} đã bị thu hồi — ${state.net === 'offline' ? 'cần mạng để cập nhật (APP_REVOKED)' : 'đang tải bản an toàn…'}</span></div>`;
+  else if (detail === 'hello' && state.update) status = `<div class="banner info"><span>Bản 0.3.0 đã tải, sẽ chạy ở lần mở sau</span></div>`;
+  if (detail === 'hello' && state.update && state.net === 'error') status += `<div class="banner err"><span>Cập nhật 0.3.0 thất bại (UPDATE_FAILED) — bản ${a.ver} vẫn chạy bình thường</span><button class="btn sec" onclick="go('S6')">Chi tiết</button></div>`;
+  if (inst) main = `<button class="btn" onclick="openApp('${detail}')">Mở</button><button class="btn sec" onclick="uninstall('${detail}')">Gỡ (giữ dữ liệu)</button>`;
+  else if (un) main = `<button class="btn" onclick="install('${detail}');go('S3')">Cài lại</button><button class="btn danger" onclick="purge('${detail}')">Xoá hẳn dữ liệu</button><div class="muted">Dữ liệu vẫn còn trên máy chủ — cài lại sẽ thấy đủ. Xoá hẳn thì không lấy lại được.</div>`;
+  else main = `<button class="btn" onclick="install('${detail}');go('S3')">Cài</button>`;
+  document.getElementById('s4-body').innerHTML = `
+    <div class="card"><div class="ic ${a.cls}">${a.ic}</div><div class="meta"><div class="name">${a.name}</div><div class="muted">${inst ? 'Đang chạy bản' : 'Bản'} ${a.ver}${un ? ' · đã gỡ' : ''}</div></div></div>
+    ${status}${main}
+    <h3>App này dùng</h3><div class="list">${a.scopes.map(s => `<div class="item"><div class="t"><b>${s}</b></div></div>`).join('')}</div>
+    <div class="muted">${a.desc}</div>`;
+}
+function uninstall(k) {
+  if (state.net === 'offline') return toast('Cần mạng để gỡ (OFFLINE)', true);
+  dialog('Gỡ ' + APPS[k].name + '?', 'Icon và gói sẽ bị xoá khỏi máy. Dữ liệu vẫn giữ trên máy chủ để cài lại.', [['Huỷ', 'sec', closeDialog], ['Gỡ', '', () => { state.installed = state.installed.filter(x => x !== k); state.order = state.order.filter(x => x !== k); state.uninstalled.push(k); state.lives = state.lives.filter(x => x !== k); closeDialog(); render(); toast('Đã gỡ ' + APPS[k].name); }]]);
+}
+function purge(k) {
+  if (state.net === 'offline') return toast('Cần mạng để xoá hẳn (OFFLINE)', true);
+  dialog('Xoá hẳn dữ liệu của ' + APPS[k].name + '?', 'Mọi dữ liệu của app trên máy chủ sẽ bị xoá và <b>không lấy lại được</b>. Gõ <b>XOÁ</b> để xác nhận.<div class="field" style="margin-top:var(--space-sm)"><input class="input" id="purge-in" placeholder="XOÁ"></div>', [['Huỷ', 'sec', closeDialog], ['Xoá hẳn', 'danger', () => { if (document.getElementById('purge-in').value !== 'XOÁ') return toast('Hãy gõ đúng chữ XOÁ', true); state.uninstalled = state.uninstalled.filter(x => x !== k); closeDialog(); render(); toast('Đã xoá dữ liệu ' + APPS[k].name); }]]);
+}
+
+// ---------- S5 host ----------
+function openApp(k) {
+  if (!state.installed.includes(k)) { if (k === 'cal') return toast('Hello Lịch chưa cài (INTENT_NO_HANDLER)', true); return; }
+  state.current = k; go('S5');
+  const blocked = k === 'hello' && state.revoked && state.net === 'offline';
+  document.getElementById('block').classList.toggle('hide', !blocked);
+  if (blocked) { document.getElementById('splash').classList.add('hide'); return; }
+  if (!state.lives.includes(k)) {
+    if (state.lives.length >= 3) { const old = state.lives.shift(); toast(`${APPS[old].name} đã lưu & tạm dừng (lifecycle.suspend) — giữ tối đa 3 app`); }
+    state.lives.push(k); document.getElementById('splash').classList.remove('hide'); setTimeout(() => { document.getElementById('splash').classList.add('hide'); renderS5(); }, 600);
+  } else { document.getElementById('splash').classList.add('hide'); toast(`${APPS[k].name} tiếp tục (lifecycle.resume)`); }
+  renderS5();
+}
+function closeApp() { go('S2'); }
+function renderS5() {
+  const k = state.current || 'hello'; const a = APPS[k];
+  document.getElementById('s5-title').textContent = a.name;
+  document.getElementById('lives').innerHTML = state.lives.map(x => `<span class="chip ${x === k ? 'busy' : ''}">${APPS[x].name}</span>`).join('') + ` <span class="muted">${state.lives.length}/3</span>`;
+  const wv = document.getElementById('wv');
+  if (k === 'hello') wv.innerHTML = `<div class="mini">
+      <h3>Hello 0.2.0</h3><div class="muted">Mini app mẫu — chạy trong WebView, chỉ gọi SDK</div>
+      <div class="field"><input class="input" id="draft" placeholder="Ghi chú mới…" value="${state.appState.hello.draft}" oninput="state.appState.hello.draft=this.value"></div>
+      <button class="btn" onclick="write('db.execute INSERT items','Đã thêm mục (ghi local tức thì)')">Thêm mục</button>
+      <ul class="muted"><li>Mua sữa · ${state.net === 'offline' ? 'chờ đồng bộ' : 'đã đồng bộ'}</li><li>Gọi bố · đã đồng bộ</li></ul>
+      <button class="btn sec" onclick="write('core.tags.create','Đã tạo tag \\'việc nhà\\' — Hello Lịch sẽ thấy')">Tạo tag dùng chung</button>
+      <button class="btn sec" onclick="toast('Thiếu scope core.contacts:read (SCOPE_DENIED)', true)">Đọc danh bạ (không có scope)</button>
+      <button class="btn sec" onclick="sendIntent(true)">Tạo nhắc 18:00 → Hello Lịch</button>
+      <button class="btn sec" onclick="toast('Payload sai: at phải là ISO (INTENT_REJECTED)', true)">Gửi intent payload sai</button>
+      <button class="btn sec" onclick="openApp('cal')">Mở Hello Lịch (intent open)</button>
+    </div>`;
+  else if (k === 'cal') wv.innerHTML = `<div class="mini">
+      <h3>Hello Lịch 0.1.0</h3><div class="muted">Nhận intent · thông báo · ảnh · mạng</div>
+      <ul class="muted"><li>Nhắc: Mua sữa — 18:00 (từ Hello)</li><li>Tag: ${state.tags.join(', ')}</li></ul>
+      ${state.photo ? `<div class="banner info"><span>📷 anh-1.jpg · ${state.net === 'offline' ? 'lưu trên máy, tải lên khi có mạng' : 'đã tải lên'}</span></div>` : ''}
+      <button class="btn sec" onclick="write('ui.pickImage','',true)">Chọn ảnh</button>
+      <button class="btn sec" onclick="go('S9')">Chia sẻ</button>
+      <button class="btn sec" onclick="write('notify.schedule','Đã đặt thông báo 18:00 (kêu cả khi offline)')">Đặt thông báo</button>
+      <button class="btn sec" onclick="toast(state.net==='offline'?'Không có mạng (OFFLINE)':'GET vnexpress.net → 200', state.net==='offline')">Gọi vnexpress.net</button>
+      <button class="btn sec" onclick="toast('Domain không khai trong manifest (NET_BLOCKED) — không có request nào rời máy', true)">Gọi domain lạ</button>
+    </div>`;
+  else wv.innerHTML = `<div class="mini"><h3>${a.name}</h3><div class="muted">App riêng — chỉ tenant này thấy.</div><button class="btn" onclick="write('db.execute','Đã ghi')">Ghi thử</button></div>`;
+}
+function write(m, ok, photo) {
+  if (state.ro) return toast('Đang chỉ đọc — thay đổi không được ghi (READ_ONLY)', true);
+  if (photo) return go('S9');
+  if (m.startsWith('core.tags') && !state.tags.includes('việc nhà')) state.tags.push('việc nhà');
+  toast(ok || 'Đã ghi');
+}
+function sendIntent() {
+  if (state.ro) return toast('Hello Lịch đang chỉ đọc (READ_ONLY)', true);
+  if (!state.installed.includes('cal')) return toast('Không có app nhận cal.reminder.create (INTENT_NO_HANDLER)', true);
+  toast('Đã tạo nhắc trong Hello Lịch', false, ['Mở?', () => openApp('cal')]);
+}
+function sysAllow() { state.photo = true; go('S5'); toast(state.net === 'offline' ? 'Đã lưu ảnh trên máy — tải lên khi có mạng' : 'Đã lưu ảnh · đang tải lên…'); }
+function sysDeny() { go('S5'); toast('Bạn đã từ chối quyền ảnh (PERMISSION_DENIED)', true); }
+
+// ---------- S6 ----------
+function renderS6() {
+  const c = CHIP[state.net]; const pend = state.net === 'offline' ? 2 : 0;
+  let list = '';
+  if (state.net === 'error') list = `<div class="list"><button class="item" onclick="toast('{ table: app_hello_items, op: PATCH, id: 7f3…, data: { title: … } }')"><div class="t"><b>Hello · app_hello_items · PATCH</b><small>FORBIDDEN · 10:42 · dòng không thuộc tenant này</small></div><span class="chev">›</span></button></div>`;
+  if (state.update && state.net === 'error') list += `<div class="list"><button class="item"><div class="t"><b>Hello · cập nhật 0.3.0</b><small>UPDATE_FAILED · migration 002 lỗi — bản 0.2.0 vẫn chạy</small></div><span class="chev">›</span></button></div>`;
+  if (!list) list = `<div class="empty"><div class="big">✓</div><div>Không có thay đổi nào bị từ chối</div></div>`;
+  document.getElementById('s6-body').innerHTML = `
+    <div class="card" style="flex-direction:column;gap:var(--space-xs)"><span class="chip ${c[0]}" style="align-self:flex-start"><span class="dot"></span>${c[1]}</span><div><b>${pend} thay đổi</b> đang chờ gửi${state.ro ? ' <span style="color:var(--color-warning)">(giữ lại vì chỉ đọc)</span>' : ''}</div><div class="muted">Đồng bộ lần cuối: hôm nay 10:41</div></div>
+    ${state.ro ? '<div class="banner warn"><span>Chỉ đọc: máy chủ từ chối ghi (READ_ONLY) — thay đổi được giữ, không mất</span></div>' : ''}
+    <h3>Bị từ chối</h3>${list}
+    <button class="btn sec" ${state.net === 'offline' ? 'disabled' : ''} onclick="toast('Đang đồng bộ lại…')">Thử đồng bộ lại</button>`;
+}
+
+// ---------- S7 ----------
+function renderS7() {
+  const off = state.net === 'offline';
+  document.getElementById('s7-body').innerHTML = `
+    ${off ? '<div class="banner warn"><span>Offline — không thu hồi thiết bị được</span></div>' : ''}
+    <div class="list">${state.devices.map((d, i) => `<div class="item"><div class="t"><b>${d.n} ${d.me ? '<span class="tag">thiết bị này</span>' : ''}</b><small>${d.p} · ${d.t}</small></div><button class="btn ${d.me ? 'sec' : 'danger'}" ${off ? 'disabled' : ''} onclick="revoke(${i})">${d.me ? 'Đăng xuất' : 'Đăng xuất máy này'}</button></div>`).join('')}</div>
+    ${state.devices.length === 1 ? '<div class="empty"><div>Chỉ có thiết bị này</div></div>' : ''}
+    <div class="field"><label>Tên thiết bị này</label><input class="input" value="Pixel 7" onchange="toast('Đã đổi tên (register_device)')"></div>`;
+}
+function revoke(i) { const d = state.devices[i]; dialog(d.me ? 'Đăng xuất?' : 'Đăng xuất ' + d.n + '?', d.me ? 'Còn 2 thay đổi chưa gửi. Thay đổi sẽ được giữ nếu đăng nhập lại cùng tài khoản.' : 'Máy đó sẽ bị đăng xuất ở lần kết nối tiếp theo. Dữ liệu chưa gửi trên máy đó được giữ tới khi đăng nhập lại.', [['Ở lại', 'sec', closeDialog], [d.me ? 'Vẫn đăng xuất' : 'Đăng xuất máy đó', 'danger', () => { closeDialog(); if (d.me) { state.signedIn = false; go('S1'); } else { state.devices.splice(i, 1); render(); toast('Đã thu hồi ' + d.n); } }]]); }
+
+// ---------- S8 ----------
+function renderS8() {
+  document.getElementById('s8-body').innerHTML = `
+    <div class="card" style="flex-direction:column;gap:var(--space-xs)"><b>a@test.local</b><div class="muted">Gói: mvp-unlimited — không giới hạn app${state.ro ? ' · <span style="color:var(--color-warning)">quá ân hạn 7 ngày</span>' : ''}</div></div>
+    ${state.ro ? '<div class="banner warn"><span>Chỉ đọc — cần mạng để xác minh lại gói. Dữ liệu không mất.</span><button class="btn sec" onclick="toast(state.net===\'offline\'?\'Vẫn offline (OFFLINE)\':\'Đã xác minh lại — hết chỉ đọc\',state.net===\'offline\');if(state.net!==\'offline\'){setRO(false);document.getElementById(\'sim-ro\').checked=false}">Xác minh</button></div>' : ''}
+    <div class="list">
+      <button class="item" onclick="go('S7')"><div class="t"><b>Thiết bị</b><small>${state.devices.length} máy đang đăng nhập</small></div><span class="chev">›</span></button>
+      <button class="item" onclick="go('S6')"><div class="t"><b>Đồng bộ</b><small>${CHIP[state.net][1]}</small></div><span class="chev">›</span></button>
+      <button class="item" onclick="toast('Google chưa được cấu hình trên máy này (PROVIDER_UNAVAILABLE)', true)"><div class="t"><b>Liên kết Google</b><small>Đăng nhập nhanh hơn, cùng tài khoản</small></div><span class="chev">›</span></button>
+      <button class="item" onclick="toast('Apple chưa được cấu hình (PROVIDER_UNAVAILABLE)', true)"><div class="t"><b>Liên kết Apple</b><small>Chỉ bắt buộc trên iPhone</small></div><span class="chev">›</span></button>
+    </div>
+    <button class="btn sec" onclick="revoke(0)">Đăng xuất</button>`;
+}
+
+// ---------- toast / dialog ----------
+let toastT;
+function toast(txt, err, action) { const t = document.getElementById('toast'); const b = document.getElementById('toast-btn'); document.getElementById('toast-txt').textContent = txt; t.classList.toggle('err', !!err); t.classList.add('show'); b.classList.toggle('hide', !action); if (action) { b.textContent = action[0]; b.onclick = () => { t.classList.remove('show'); action[1](); }; } clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 4000); }
+function dialog(title, body, btns) { const d = document.getElementById('dialog'); d.innerHTML = `<h3>${title}</h3><div>${body}</div><div class="row"></div>`; const r = d.querySelector('.row'); btns.forEach(([l, c, f]) => { const b = document.createElement('button'); b.className = 'btn ' + c; b.textContent = l; b.onclick = f; r.appendChild(b); }); document.getElementById('phone').classList.add('modal'); }
+function closeDialog() { document.getElementById('phone').classList.remove('modal'); }
+
+// ---------- render chung ----------
+function render() {
+  const c = CHIP[state.net];
+  document.querySelectorAll('[data-chip]').forEach(el => { el.className = 'chip ' + c[0]; el.querySelector('[data-chiptxt]').textContent = c[1]; });
+  document.querySelectorAll('[data-ro]').forEach(el => el.classList.toggle('hide', !state.ro));
+  document.querySelectorAll('#S1 [data-off]').forEach(el => el.classList.toggle('hide', state.net !== 'offline'));
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === state.screen));
+  document.getElementById('S10').classList.toggle('show', state.screen === 'S10');
+  document.getElementById('phone').style.display = state.screen === 'S10' ? 'none' : '';
+  document.getElementById('nav').innerHTML = ORDER.map(s => `<a href="#${s}" class="${s === state.screen ? 'on' : ''}">${s}</a>`).join('');
+  ({ S2: renderS2, S3: renderS3, S4: renderS4, S5: renderS5, S6: renderS6, S7: renderS7, S8: renderS8, S10: mockRender })[state.screen]?.();
+}
+
+// ---------- S10 mock console ----------
+let mockLog = [];
+const NS = [['sdk.ready', '—'], ['db.query', 'db.own'], ['core.tags.list', 'core.tags:read'], ['intent.send', 'intent.send'], ['notify.schedule', 'notify.local'], ['storage.put', 'storage.files'], ['net.fetch', 'net'], ['ui.toast', 'ui.native'], ['sync.status', '—'], ['auth.getAppToken', 'auth.token']];
+function mockCall(m, scope) {
+  const full = document.getElementById('mock-manifest').value === 'full'; const net = document.getElementById('mock-net').value;
+  const has = scope === '—' || scope === 'db.own' || full;
+  let r;
+  if (!has) r = ['bad', 'SCOPE_DENIED'];
+  else if (net === 'ro' && /execute|put|create|schedule|send/.test(m)) r = ['bad', 'READ_ONLY'];
+  else if (m === 'net.fetch' && net === 'offline') r = ['bad', 'OFFLINE'];
+  else if (m === 'net.fetch.blocked') r = ['bad', 'NET_BLOCKED'];
+  else r = ['ok', 'OK'];
+  mockLog.unshift([new Date().toLocaleTimeString('vi-VN'), m, scope, r]); mockRender();
+}
+function mockMatrix() { mockLog.unshift(['—', 'ma trận scope', '9 namespace × có/không', ['ok', 'PASS — khớp bảng kỳ vọng Jest của shell']]); NS.forEach(([m, s]) => mockCall(m, s)); }
+function mockRender() {
+  document.getElementById('mock-app').innerHTML = `<h3>Hello 0.2.0 (mock SDK)</h3><div class="muted">SQLite WASM · log mọi lời gọi</div>
+    <div class="field"><input class="input" placeholder="Ghi chú mới…"></div>
+    <button class="btn" onclick="mockCall('db.execute INSERT items','db.own')">Thêm mục</button>
+    <button class="btn sec" onclick="mockCall('core.tags.create','core.tags:write')">Tạo tag dùng chung</button>
+    <button class="btn sec" onclick="mockCall('intent.send cal.reminder.create','intent.send')">Tạo nhắc → Hello Lịch</button>
+    <button class="btn sec" onclick="mockCall('net.fetch vnexpress.net','net')">Gọi vnexpress.net</button>
+    <button class="btn sec" onclick="mockCall('net.fetch.blocked','net')">Gọi domain lạ</button>
+    <button class="btn sec" onclick="mockCall('ui.pickImage','ui.native')">Chọn ảnh (hộp thoại trình duyệt)</button>`;
+  document.getElementById('mock-log').innerHTML = mockLog.length ? mockLog.map(([t, m, s, r]) => `<div><span class="wait">${t}</span><span>${m}</span><span class="wait">${s}</span><span class="${r[0]}">${r[1]}</span></div>`).join('') : `<div class="empty"><div>Chưa có lời gọi nào — bấm nút ở app mẫu</div></div>`;
+}
+
+// khởi động
+state.screen = ORDER.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'S1';
+if (state.screen !== 'S1' && state.screen !== 'S10') state.signedIn = true;
+render();
+</script>
+</body>
+</html>
