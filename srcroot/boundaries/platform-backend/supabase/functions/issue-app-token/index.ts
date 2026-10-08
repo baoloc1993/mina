@@ -16,11 +16,11 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return json({ error: "BAD_REQUEST" }, 400);
+    return json({ error: "BAD_REQUEST", detail: "body phải là JSON { app_id }" }, 400);
   }
   const appId = body.app_id;
   if (!appId || !/^[a-z0-9]+(\.[a-z0-9-]+)+$/.test(appId)) {
-    return json({ error: "BAD_APP_ID" }, 400);
+    return json({ error: "BAD_APP_ID", detail: "app_id dạng reverse-domain chữ thường, vd vn.app.hello" }, 400);
   }
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {

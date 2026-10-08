@@ -90,7 +90,8 @@ export function lintMigration(sql: string, prefix: string): LintResult {
   const statements = splitStatements(sql);
   const createdTables: string[] = [];
   for (const stmt of statements) {
-    const n = stmt.replace(/\s+/g, " ").trim().toLowerCase();
+    const orig = stmt.replace(/\s+/g, " ").trim();
+    const n = orig.toLowerCase();
 
     let m = n.match(new RegExp(`^create table if not exists ${QUAL} ?\\((.*)\\)$`));
     if (m) {
@@ -142,7 +143,7 @@ export function lintMigration(sql: string, prefix: string): LintResult {
       continue;
     }
 
-    throw new RegistryError("MIGRATION_NOT_ADDITIVE", `câu lệnh không nằm trong danh sách cho phép: ${n.slice(0, 80)}${n.length > 80 ? "…" : ""}`);
+    throw new RegistryError("MIGRATION_NOT_ADDITIVE", `câu lệnh không nằm trong danh sách cho phép: ${orig.slice(0, 80)}${orig.length > 80 ? "…" : ""}`);
   }
   return { statements, createdTables };
 }

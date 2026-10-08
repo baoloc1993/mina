@@ -17,12 +17,14 @@ export interface Store {
   patch(table: string, id: string, data: Record<string, unknown>, deletedAt?: string): Promise<PatchOutcome | StoreError>;
   insert(table: string, row: Record<string, unknown>): Promise<null | StoreError>;
   reject(rec: Rejection): Promise<void>;
+  /** Gọi một lần cuối lô: ghi gộp các `reject` đã gom (1 INSERT thay vì N — lô lớn không đụng giới hạn CPU). */
+  flush?(): Promise<void>;
 }
 
 const SYSTEM_COLUMNS = new Set(["id", "tenant_id", "created_at", "updated_at", "deleted_at"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COLUMN = /^[a-z_][a-z0-9_]*$/;
-export const MAX_OPS = 1000;
+export const MAX_OPS = 500;
 
 export function classifyDbError(e: { code?: string; message: string }): string | null {
   const c = e.code ?? "";
@@ -134,5 +136,6 @@ export async function processOps(
     }
     results.push(res);
   }
+  await store.flush?.();
   return results;
 }

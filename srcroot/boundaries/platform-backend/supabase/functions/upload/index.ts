@@ -10,6 +10,7 @@ function makeStore(token: string, tenantId: string): Store {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   });
+  const pending: Record<string, unknown>[] = [];
   const toErr = (e: { code?: string; message: string }): StoreError => ({ error: { code: e.code, message: e.message } });
 
   return {
@@ -40,9 +41,14 @@ function makeStore(token: string, tenantId: string): Store {
       return error ? toErr(error) : null;
     },
 
-    async reject(rec: Rejection) {
-      // Không để lỗi ghi hàng đợi lỗi làm hỏng cả lô.
-      await sb.from("sync_rejections").insert({ ...rec, tenant_id: tenantId });
+    reject(rec: Rejection) {
+      pending.push({ ...rec, tenant_id: tenantId });
+      return Promise.resolve();
+    },
+
+    async flush() {
+      // Một INSERT cho cả lô; lỗi ghi hàng đợi lỗi không làm hỏng lô (kết quả vẫn trả đúng).
+      if (pending.length > 0) await sb.from("sync_rejections").insert(pending.splice(0));
     },
   };
 }
@@ -57,7 +63,7 @@ Deno.serve(async (req) => {
     ops = (await req.json()).ops;
     if (!Array.isArray(ops) || ops.length > MAX_OPS) throw new Error();
   } catch {
-    return json({ error: "BAD_REQUEST", detail: `cần { ops: [...] } tối đa ${MAX_OPS} thay đổi` }, 400);
+    return json({ error: "BAD_REQUEST", detail: `body phải là JSON { ops: [...] } với tối đa ${MAX_OPS} thay đổi` }, 400);
   }
 
   try {

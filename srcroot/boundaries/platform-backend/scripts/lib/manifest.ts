@@ -31,8 +31,8 @@ export function readManifest(dir: string): Manifest {
   let raw: Record<string, unknown>;
   try {
     raw = JSON.parse(readFileSync(path, "utf8"));
-  } catch (e) {
-    throw new RegistryError("BAD_MANIFEST", `manifest.json không phải JSON: ${(e as Error).message}`);
+  } catch {
+    throw new RegistryError("BAD_MANIFEST", "manifest.json không phải JSON hợp lệ (kiểm dấu phẩy, ngoặc, nháy kép)");
   }
   const bad = (m: string): never => {
     throw new RegistryError("BAD_MANIFEST", m);
@@ -41,7 +41,7 @@ export function readManifest(dir: string): Manifest {
   if (typeof raw.name !== "string" || !raw.name.trim()) bad("thiếu name");
   if (typeof raw.version !== "string" || !SEMVER.test(raw.version)) bad("version phải là semver x.y.z");
   if (typeof raw.sdk !== "string" || !raw.sdk) bad("thiếu sdk");
-  if (typeof raw.entry !== "string" || !existsSync(join(dir, raw.entry))) bad(`entry "${String(raw.entry)}" không có trong thư mục app`);
+  if (typeof raw.entry !== "string" || !existsSync(join(dir, raw.entry))) bad(`entry "${String(raw.entry)}" không có trong thư mục app — entry phải nằm cạnh manifest.json (nếu app có bước build, publish thư mục đã build)`);
   const scopes = raw.scopes ?? [];
   const tables = raw.tables ?? [];
   if (!Array.isArray(scopes) || scopes.some((s) => typeof s !== "string")) bad("scopes phải là mảng chuỗi");

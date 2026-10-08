@@ -88,7 +88,12 @@ export async function publish(db: Client, cfg: Config, opts: PublishOptions): Pr
         if (applied.get(filename) !== sha) throw new RegistryError("MIGRATION_CHANGED", `${filename} đã áp với nội dung khác — thêm file migration mới thay vì sửa file cũ`);
         continue;
       }
-      pending.push({ filename, sha, ...lintMigration(sql, prefix) }); // ném nếu không cộng thêm → chưa chạm DB, chưa upload
+      try {
+        pending.push({ filename, sha, ...lintMigration(sql, prefix) }); // ném nếu không cộng thêm → chưa chạm DB, chưa upload
+      } catch (e) {
+        if (e instanceof RegistryError) throw new RegistryError(e.code, `migrations/${filename}: ${e.detail}`);
+        throw e;
+      }
     }
   }
 
