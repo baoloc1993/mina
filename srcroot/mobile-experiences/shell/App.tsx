@@ -1,13 +1,18 @@
 // Shell vòng 1 (spike): đăng nhập Email OTP → mở DB mã hoá + sync → mở mini app hello trong WebView.
 // Không phải UI sản phẩm (design system ở vòng 3): chỉ đủ để đi hết luồng lõi và đo.
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Platform, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, LogBox, Platform, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import type { PowerSyncDatabase } from '@powersync/react-native';
+import { config } from './src/config';
 import { requestOtp, supabase, tenantIdOf, verifyOtp } from './src/auth/supabase';
 import { connectSync, disconnectAndClear, openDatabase } from './src/store/db';
 import { installFromAsset, type InstalledApp } from './src/webview/packageManager';
 import { MiniAppHost } from './src/webview/MiniAppHost';
+
+// Mất mạng là trạng thái bình thường của app offline-first: PowerSync log nó bằng console.error,
+// LogBox ở bản dev biến nó thành màn đỏ chặn thao tác. Chỉ ẩn log sync, lỗi khác vẫn hiện.
+LogBox.ignoreLogs(['[PowerSync]']);
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const HELLO_ZIP = require('./assets/miniapp-hello.zip');
@@ -15,9 +20,10 @@ const HELLO_ZIP = require('./assets/miniapp-hello.zip');
 function syncLabel(db: PowerSyncDatabase | null): string {
   if (!db) return 'đang khởi động';
   const s = db.currentStatus;
-  const up = s?.dataFlowStatus?.uploadError;
-  if (up) return 'lỗi (thay đổi bị từ chối — đang giữ lại)';
+  // Mất mạng làm upload lỗi theo, nhưng đó là offline chứ không phải bị từ chối: kiểm kết nối trước.
   if (!s?.connected) return 'offline';
+  const up = s.dataFlowStatus?.uploadError;
+  if (up) return 'lỗi (thay đổi bị từ chối — đang giữ lại)';
   if (s.dataFlowStatus?.uploading || s.dataFlowStatus?.downloading) return 'đang sync';
   return 'đã sync';
 }
@@ -41,6 +47,7 @@ export default function App() {
   const [sent, setSent] = useState(false);
   const [msg, setMsg] = useState('');
   const [openTimes, setOpenTimes] = useState<number[]>([]);
+  const [rows, setRows] = useState<number | null>(null);
 
   // Khởi động: mở DB mã hoá, cài hello, đọc session (có thể offline hoàn toàn).
   useEffect(() => {
@@ -66,6 +73,44 @@ export default function App() {
     const off = db.registerListener({ statusChanged: () => setStatus(syncLabel(db)) });
     setStatus(syncLabel(db));
     return () => off();
+  }, [db, signedIn]);
+
+  // Bộ canh kết nối: sau khi mạng quay lại, kết nối PowerSync đôi khi treo ~40 s mới tự thử lại
+  // (đo ở dogfood AC-2). Khi server đã tới được mà trạng thái vẫn offline thì nối lại ngay.
+  // Bản production nên dùng NetInfo (module native) — xem DECISIONS.
+  useEffect(() => {
+    if (!db || !signedIn) return;
+    let busy = false;
+    const t = setInterval(async () => {
+      if (busy || db.currentStatus?.connected) return;
+      busy = true;
+      try {
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), 2000);
+        const r = await fetch(`${config.powersyncUrl}/probes/liveness`, { signal: ctl.signal });
+        clearTimeout(to);
+        if (r.ok && !db.currentStatus?.connected) {
+          await db.disconnect();
+          await connectSync(db);
+        }
+      } catch {
+        // vẫn offline thật — thử lại ở nhịp sau
+      } finally {
+        busy = false;
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [db, signedIn]);
+
+  // Số dòng local (đo thời gian sync ở dogfood/AC-2; không đi qua bridge).
+  useEffect(() => {
+    if (!db || !signedIn) return;
+    const t = setInterval(() => {
+      db.get<{ n: number }>('SELECT COUNT(*) AS n FROM app_hello_items WHERE deleted_at IS NULL')
+        .then((r) => setRows(r.n))
+        .catch(() => undefined);
+    }, 1000);
+    return () => clearInterval(t);
   }, [db, signedIn]);
 
   const send = useCallback(async () => {
@@ -131,7 +176,7 @@ export default function App() {
           Trạng thái: {status}
         </Text>
         <Text style={styles.small}>
-          tenant {tenantId ? tenantId.slice(0, 8) : '—'} · mở app: {openTimes.length} lần{med != null ? `, trung vị ${med} ms` : ''}
+          tenant {tenantId ? tenantId.slice(0, 8) : '—'} · mục local: {rows ?? '—'} · mở app: {openTimes.length} lần{med != null ? `, trung vị ${med} ms` : ''}
         </Text>
         <View style={styles.row}>
           {open ? (

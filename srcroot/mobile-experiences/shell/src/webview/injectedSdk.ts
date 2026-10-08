@@ -2,6 +2,7 @@
 // Mini app chỉ thấy window.miniapp; mọi thứ khác đi qua postMessage → bridge.
 export const INJECTED_SDK = `
 (function () {
+  if (window.miniapp) return; // đã được chèn (vào HTML hoặc qua WebView) — không định nghĩa lại
   var pending = {};
   var seq = 0;
   function call(method, params) {
@@ -41,8 +42,13 @@ export const INJECTED_SDK = `
 export const APP_CSP =
   "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'";
 
+/**
+ * Chèn CSP + SDK vào <head> của index.html TRƯỚC mọi script của app. Không dựa vào
+ * injectedJavaScriptBeforeContentLoaded của WebView: trên Android nó không đảm bảo chạy trước nội dung
+ * (đo ở dogfood: thỉnh thoảng window.miniapp undefined khi script app chạy — vi phạm AC-5).
+ */
 export function injectCsp(html: string): string {
-  const meta = `<meta http-equiv="Content-Security-Policy" content="${APP_CSP}">`;
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${APP_CSP}"><script>${INJECTED_SDK}</script>`;
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => `${m}${meta}`);
   return `<head>${meta}</head>${html}`;
 }

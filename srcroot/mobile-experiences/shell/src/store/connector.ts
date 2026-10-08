@@ -17,14 +17,25 @@ export class Connector implements PowerSyncBackendConnector {
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw new Error('Chưa đăng nhập');
     const ops = tx.crud.map((c) => ({ op: c.op, table: c.table, id: c.id, data: c.opData }));
+    // Timeout + không tái dùng kết nối: sau khi mất mạng, kết nối keep-alive cũ trong pool đã chết
+    // và làm lần upload kế tiếp treo ~40 s (đo ở dogfood AC-2). Hết giờ thì engine tự thử lại.
+    const t0 = Date.now();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    console.log(`[upload] bắt đầu ${ops.length} thay đổi`);
     const res = await fetch(`${config.supabaseUrl}/functions/v1/upload`, {
       method: 'POST',
+      signal: ctl.signal,
       headers: {
+        connection: 'close',
         'content-type': 'application/json',
         authorization: `Bearer ${data.session.access_token}`,
         apikey: config.supabaseAnonKey,
       },
       body: JSON.stringify({ ops }),
+    }).finally(() => {
+      clearTimeout(timer);
+      console.log(`[upload] kết thúc sau ${Date.now() - t0} ms`);
     });
     if (!res.ok) throw new Error(`upload HTTP ${res.status}`);
     const body = (await res.json()) as { results: { id: string; ok: boolean; error?: string }[] };
