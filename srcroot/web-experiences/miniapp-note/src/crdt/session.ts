@@ -33,6 +33,7 @@ export class NoteSession {
   private chain: Promise<unknown> = Promise.resolve();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
+  private flushedListeners = new Set<(ok: boolean, err?: unknown) => void>();
   private dead = false;
 
   private constructor(
@@ -57,6 +58,12 @@ export class NoteSession {
   onLocalChange(cb: () => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Gọi sau mỗi lần ghi (kể cả tự động sau 1 s): `ok=false` kèm lỗi khi ghi thất bại (vd READ_ONLY) — chữ vẫn giữ để ghi lại. */
+  onFlushed(cb: (ok: boolean, err?: unknown) => void): () => void {
+    this.flushedListeners.add(cb);
+    return () => this.flushedListeners.delete(cb);
   }
 
   get dirty(): boolean {
@@ -120,9 +127,11 @@ export class NoteSession {
         ]);
       } catch (e) {
         this.pending = [...batch, ...this.pending]; // không mất chữ: giữ lại để thử ghi lần sau (vd READ_ONLY → hết chỉ đọc)
+        this.flushedListeners.forEach((l) => l(false, e));
         throw e;
       }
       this.known.add(id);
+      this.flushedListeners.forEach((l) => l(true));
       return true;
     });
   }
@@ -137,7 +146,7 @@ export class NoteSession {
       if (ids.length <= threshold) return false;
       const id = this.deps.newId();
       const snap = Y.encodeStateAsUpdate(this.doc);
-      const stmts: { sql: string; params: unknown[] }[] = [
+      const stmts: { sql: string; params: (string | number | null)[] }[] = [
         // (1) snapshot TRƯỚC — hàng đợi giữ thứ tự nên máy khác không bao giờ thấy "xoá" mà thiếu snapshot
         { sql: 'INSERT INTO note_blocks (id, note_id, kind, data, size) VALUES (?, ?, ?, ?, ?)', params: [id, this.noteId, 'snapshot', b64encode(snap), snap.length] },
       ];
@@ -157,6 +166,7 @@ export class NoteSession {
     this.dead = true;
     if (this.timer) clearTimeout(this.timer);
     this.listeners.clear();
+    this.flushedListeners.clear();
     this.doc.destroy();
   }
 }

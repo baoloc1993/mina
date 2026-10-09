@@ -64,6 +64,18 @@ export async function restoreNote(sdk: Sdk, id: string): Promise<void> {
   await sdk.db.execute('UPDATE notes SET trashed_at_ms = NULL WHERE id = ?', [id]);
 }
 
+/** Note vừa bấm "Ghi chú mới" rồi thoát mà chưa gõ gì (không tiêu đề, không nội dung, không tag/đính kèm) → xoá, không để dòng trống. */
+export async function discardIfEmpty(sdk: Sdk, id: string): Promise<boolean> {
+  const n = await getNote(sdk, id);
+  if (!n || n.trashed_at_ms !== null || n.title.trim() || n.snippet.trim()) return false;
+  for (const table of ['note_blocks', 'note_tags', 'note_files']) {
+    const r = (await sdk.db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table} WHERE note_id = ?`, [id])) as { n: number }[];
+    if (r[0]?.n) return false;
+  }
+  await sdk.db.execute('DELETE FROM notes WHERE id = ?', [id]);
+  return true;
+}
+
 /** Số ngày còn lại trước khi tự xoá hẳn (≥ 0). */
 export function daysLeft(trashedAtMs: number, now = Date.now()): number {
   return Math.max(0, Math.ceil((trashedAtMs + TRASH_DAYS * DAY_MS - now) / DAY_MS));
