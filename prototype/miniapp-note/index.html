@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mina — prototype Ghi chú (vòng 4)</title>
+<title>Mina — prototype Ghi chú (vòng 4 + delta vòng 5)</title>
 <style>
 /* Token: bản sao đúng DESIGN-SYSTEM.md §2 — nơi DUY NHẤT có giá trị thật */
 :root {
@@ -190,6 +190,15 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
 .toast.err button { color: var(--color-on-primary); }
 .shelltoast { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); }
 .shelltoast button { color: var(--color-primary); }
+
+/* Delta vòng 5: S18 "Nhắc tôi" (C24 + C27) và dòng lời nhắc C26 rút gọn */
+.menu button[disabled] { opacity: .4; cursor: default; }
+.lbl { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted); margin-bottom: var(--space-xs); display: block; }
+.two { display: flex; gap: var(--space-sm); }
+.two > * { flex: 1; min-width: 0; }
+.warntxt { color: var(--color-warning); font-size: var(--text-sm); margin-top: var(--space-xs); }
+.remrow { display: flex; align-items: center; gap: var(--space-sm); min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md); background: var(--color-surface); font-size: var(--text-sm); }
+.remrow span { flex: 1; }
 </style>
 </head>
 <body>
@@ -219,6 +228,7 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
       <label><input type="checkbox" id="simRO"> Chỉ đọc (quá ân hạn)</label>
       <label><input type="checkbox" id="simClean"> DB sạch (chưa có ghi chú)</label>
       <div class="nav"><button id="simNewDevice">Máy mới đang tải từ máy chủ</button></div>
+      <label><input type="checkbox" id="simNoCal"> Lịch chưa cài (S18)</label>
     </fieldset>
     <fieldset><legend>Hai máy (AC-2)</legend>
       <div class="nav">
@@ -276,7 +286,7 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
   var notes, trash, state;
   function seed() {
     notes = [
-      { id: 'n1', title: 'Danh sách đi chợ', pinned: true, tags: ['mua sắm', 'việc nhà'], when: 'Hôm nay 09:12', files: [], body: '<p>Chủ nhật này nhớ mua:</p><div class="cl" data-cl="1"><span class="box"></span><span class="tx">Rau muống, cà chua</span></div><div class="cl done" data-cl="1"><span class="box">✓</span><span class="tx">Sữa tươi không đường</span></div><div class="cl" data-cl="1"><span class="box"></span><span class="tx">Gạo ST25 5 kg</span></div>' },
+      { id: 'n1', title: 'Danh sách đi chợ', pinned: true, tags: ['mua sắm', 'việc nhà'], when: 'Hôm nay 09:12', files: [], reminder: null, body: '<p>Chủ nhật này nhớ mua:</p><div class="cl" data-cl="1"><span class="box"></span><span class="tx">Rau muống, cà chua</span></div><div class="cl done" data-cl="1"><span class="box">✓</span><span class="tx">Sữa tươi không đường</span></div><div class="cl" data-cl="1"><span class="box"></span><span class="tx">Gạo ST25 5 kg</span></div>' },
       { id: 'n2', title: 'Họp tuần — đăng ký lịch', pinned: false, tags: ['công việc'], when: 'Hôm qua', files: [{ kind: 'pdf', name: 'lich-hop-tuan.pdf', size: '220 KB', pending: false }], body: '<h2>Việc cần chốt</h2><ul><li>Đăng ký phòng họp thứ Ba</li><li>Gửi tài liệu trước 17:00</li></ul>' },
       { id: 'n3', title: 'Ý tưởng app đọc báo', pinned: false, tags: ['ý tưởng'], when: 'Thứ Hai', files: [{ kind: 'image', name: 'phac-thao.jpg', size: '1,4 MB', pending: false }], body: '<p>Lưu bài thành <b>ghi chú</b> rồi đặt nhắc đọc lại. Cần chữ to cho bố mẹ.</p>' },
       { id: 'n4', title: 'Ghi chú nhanh', pinned: false, tags: [], when: 'Thứ Hai', files: [], body: '<p>Mật khẩu wifi nhà bà ngoại ghi ở mặt sau tủ lạnh.</p>' },
@@ -289,7 +299,7 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
       { id: 't1', title: 'Danh sách cũ — đi Đà Lạt', tags: ['việc nhà'], body: '<p>Áo ấm, ô, thuốc say xe.</p>', when: 'Đã xoá 27 ngày trước', left: 3, files: [] },
       { id: 't2', title: 'Nháp thư xin nghỉ', tags: [], body: '<p>Kính gửi anh/chị… xin nghỉ phép ngày 20.</p>', when: 'Đã xoá 9 ngày trước', left: 21, files: [] }
     ];
-    state = { screen: 'S11', cur: null, q: '', tagFilter: '', offline: false, ro: false, clean: false, loading: 0, banner: null, save: 'saved', menu: false, sheet: false, dialog: null, toast: null, err: null, compacting: false };
+    state = { screen: 'S11', cur: null, q: '', tagFilter: '', offline: false, ro: false, clean: false, loading: 0, banner: null, save: 'saved', menu: false, sheet: false, rem: null, noCal: false, dialog: null, toast: null, err: null, compacting: false };
   }
   seed();
 
@@ -372,11 +382,12 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
     var h = '<div class="bar"><button class="iconbtn" data-act="back" aria-label="Quay lại">←</button>' +
       '<span class="savebar' + (state.save === 'busy' ? ' busy' : '') + '" id="savebar">' + saveText() + '</span>' +
       '<button class="iconbtn" data-act="menu" aria-label="Thao tác"' + (ro ? ' disabled' : '') + '>⋯</button></div>';
-    if (state.menu) h += '<div class="menu"><button data-act="pin">' + (n.pinned ? 'Bỏ ghim' : 'Ghim lên đầu') + '</button><button class="dg" data-act="trash">Chuyển vào thùng rác</button></div>';
+    if (state.menu) h += '<div class="menu"><button data-act="pin">' + (n.pinned ? 'Bỏ ghim' : 'Ghim lên đầu') + '</button><button data-act="remind"' + (ro ? ' disabled' : '') + '>Nhắc tôi</button><button class="dg" data-act="trash">Chuyển vào thùng rác</button></div>';
     h += '<div class="body" style="padding-bottom:88px">';
     if (tr) h += '<div class="banner warn"><span>Ghi chú này đang ở thùng rác — chỉ xem được.</span><button class="btn slim" data-act="restore" data-id="' + n.id + '">Khôi phục</button></div>';
     else if (state.ro) h += '<div class="banner warn"><span>Chỉ đọc (READ_ONLY) — cần mạng để xác minh lại. Chữ bạn đã gõ vẫn còn.</span></div>';
     if (state.banner) h += '<div class="banner info"><span>' + esc(state.banner) + '</span><button class="btn slim sec" data-act="dismiss">Đã hiểu</button></div>';
+    if (n.reminder) h += '<div class="remrow"><span>Lời nhắc: ' + esc(n.reminder.text) + '</span><button class="link" data-act="openincal">Mở trong Lịch</button></div>';
     h += '<input class="ttlinput" id="ttl" placeholder="Tiêu đề" value="' + esc(n.title) + '"' + (ro ? ' readonly' : '') + '>';
     h += '<div class="editor" id="ed" data-ph="Viết gì đó…" contenteditable="' + (ro ? 'false' : 'true') + '">' + n.body + '</div>';
     h += '<div class="tags">' + n.tags.map(function (t) { return '<span class="tagchip">' + esc(t) + (ro ? '' : '<button class="rm" data-act="untag" data-v="' + esc(t) + '" aria-label="Gỡ tag">×</button>') + '</span>'; }).join('') + (ro ? '' : '<button class="tagchip" data-act="sheet">+ Tag</button>') + '</div>';
@@ -417,6 +428,39 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
     h += '<div class="row"><button class="btn sec" data-act="addtag">Thêm</button><button class="btn" data-act="closesheet">Xong</button></div></div></div>';
     return h;
   }
+  /* ---------- S18 Nhắc tôi (delta vòng 5) ---------- */
+  var NOW = { y: 2026, m: 10, d: 9, min: 10 * 60 + 30 };            /* giả định: thứ Sáu 09/10/2026 10:30 */
+  var WDL = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  /* ngày âm minh hoạ quanh 09–12/2026: mùng 1/8 = 11/09, 1/9 = 11/10, 1/10 = 09/11, 1/11 = 09/12 (thuật toán thật kiểm ở pha I) */
+  var LUNS = [[2026, 9, 11, 8], [2026, 10, 11, 9], [2026, 11, 9, 10], [2026, 12, 9, 11]];
+  function lunarTxt(y, m, d) {
+    var t = Date.UTC(y, m - 1, d), best = null;
+    LUNS.forEach(function (x) { if (Date.UTC(x[0], x[1] - 1, x[2]) <= t) best = x; });
+    if (!best) return '';
+    return 'ngày ' + (Math.round((t - Date.UTC(best[0], best[1] - 1, best[2])) / 864e5) + 1) + '/' + best[3] + ' âm lịch';
+  }
+  function remDate(add) { var t = new Date(Date.UTC(NOW.y, NOW.m - 1, NOW.d + add)); return t.getUTCFullYear() + '-' + p2(t.getUTCMonth() + 1) + '-' + p2(t.getUTCDate()); }
+  function remNew(n) { return { text: n.title || 'Ghi chú không tiêu đề', date: '', time: '', busy: false, err: '' }; }
+  function remPast(r) { if (!r.date || !r.time) return false; var a = r.date.split('-'), b = r.time.split(':'); return Date.UTC(+a[0], +a[1] - 1, +a[2], +b[0], +b[1]) < Date.UTC(NOW.y, NOW.m - 1, NOW.d, 0, NOW.min); }
+  function remSum(r) {
+    if (!r.date) return 'Chưa chọn ngày';
+    var a = r.date.split('-'), t = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2]));
+    return WDL[t.getUTCDay()] + ', ' + p2(+a[2]) + '/' + p2(+a[1]) + '/' + a[0] + (r.time ? ' · ' + r.time : '') + ' · ' + lunarTxt(+a[0], +a[1], +a[2]);
+  }
+  function remShort(r) { var a = r.date.split('-'), t = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])); return WDL[t.getUTCDay()] + ' ' + p2(+a[2]) + '/' + p2(+a[1]) + ' ' + r.time; }
+  function remSheetHtml() {
+    var r = state.rem, noTime = !r.date || !r.time, past = remPast(r);
+    var h = '<div class="scrim" data-act="closerem"><div class="sheet" data-stop="1" data-screen="S18"><h3>Nhắc tôi về ghi chú này</h3>';
+    if (state.noCal) h += '<div class="banner err"><span>Chưa cài Lịch — mở Catalog để cài rồi đặt lại (INTENT_NO_HANDLER)</span><button class="btn slim" data-act="opencatalog">Mở Catalog</button></div>';
+    if (r.err) h += '<div class="banner err"><span>' + esc(r.err) + '</span></div>';
+    h += '<div class="tags">' + [['h1', 'Sau 1 giờ'], ['pm', 'Chiều nay'], ['am', 'Sáng mai'], ['we', 'Cuối tuần']].map(function (x) { return '<button class="tagchip" data-act="remq" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    h += '<div><div class="two"><input class="input" type="date" id="remDate" value="' + esc(r.date) + '" aria-label="Ngày nhắc"><input class="input" type="time" id="remTime" value="' + esc(r.time) + '" aria-label="Giờ nhắc"></div>';
+    h += '<div class="muted" id="remSum" style="margin-top:var(--space-xs)">' + esc(remSum(r)) + '</div><div class="warntxt" id="remPast"' + (past ? '' : ' hidden') + '>Giờ này đã qua — sẽ nhắc ngay</div></div>';
+    h += '<div><span class="lbl">Nội dung nhắc</span><input class="input" id="remText" value="' + esc(r.text) + '" autocomplete="off"></div>';
+    h += '<div class="row"><button class="btn sec" data-act="closerem">Huỷ</button><button class="btn' + (r.busy ? ' busy' : '') + '" data-act="remset"' + (noTime || r.busy ? ' disabled' : '') + '>' + (r.busy ? 'Đang gửi…' : 'Đặt nhắc') + '</button></div></div></div>';
+    return h;
+  }
   function dialogHtml() {
     var d = state.dialog; if (!d) return '';
     return '<div class="scrim mid"><div class="dialog"><h3>' + esc(d.title) + '</h3><div class="muted" style="font-size:var(--text-base)">' + esc(d.text) + '</div><div class="row">' + d.btns.map(function (b) { return '<button class="btn ' + (b.cls || '') + '" data-dlg="' + b.id + '">' + esc(b.label) + '</button>'; }).join('') + '</div></div></div>';
@@ -429,12 +473,16 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
     else if (s === 'S12' || s === 'S14') h = renderEdit();
     else if (s === 'S13') h = renderTrash();
     if (s === 'S14' || state.sheet) h += sheetHtml();
+    if (state.rem) h += remSheetHtml();
     h += dialogHtml();
     $screen.innerHTML = h;
     chip(); paintToast();
     Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.classList.toggle('on', b.getAttribute('data-go') === s); });
     var q = document.getElementById('q'); if (q) { q.addEventListener('input', function () { state.q = q.value; var pos = q.selectionStart; render(); var q2 = document.getElementById('q'); q2.focus(); q2.setSelectionRange(pos, pos); }); }
     var ttl = document.getElementById('ttl'); if (ttl) ttl.addEventListener('input', function () { var n = find(state.cur); if (n) n.title = ttl.value; touch(); });
+    var rd = document.getElementById('remDate'), rtm = document.getElementById('remTime'), rtx = document.getElementById('remText');
+    function remUpd() { var r = state.rem; if (!r) return; r.date = rd.value; r.time = rtm.value; var sm = document.getElementById('remSum'); if (sm) sm.textContent = remSum(r); var ps = document.getElementById('remPast'); if (ps) ps.hidden = !remPast(r); var bt = document.querySelector('[data-act="remset"]'); if (bt) bt.disabled = !(r.date && r.time) || r.busy; }
+    if (rd) { rd.addEventListener('input', remUpd); rtm.addEventListener('input', remUpd); rtx.addEventListener('input', function () { state.rem.text = rtx.value; }); }
     var ed = document.getElementById('ed'); if (ed) { ed.addEventListener('input', touch); ed.addEventListener('click', function (e) { var cl = e.target.closest ? e.target.closest('.cl') : null; if (cl && !readOnlyNow(find(state.cur)) && e.target.classList.contains('box')) { cl.classList.toggle('done'); e.target.textContent = cl.classList.contains('done') ? '✓' : ''; touch(); } }); }
   }
 
@@ -480,6 +528,31 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
       var rid = t.getAttribute('data-id'), rn = find(rid); trash = trash.filter(function (x) { return x !== rn; }); rn.when = 'Vừa khôi phục'; notes.unshift(rn);
       toast('Đã khôi phục ghi chú'); if (state.screen === 'S12') { state.cur = rn.id; } render();
     }
+    else if (act === 'remind') { if (readOnlyNow(n)) return; state.menu = false; state.rem = remNew(n); location.hash = 'S18'; render(); }
+    else if (act === 'closerem') { if (e.target.closest('.sheet') && t.className.indexOf('scrim') >= 0) return; state.rem = null; location.hash = 'S12'; render(); }
+    else if (act === 'remq') {
+      var r = state.rem, v2 = t.getAttribute('data-v');
+      if (v2 === 'h1') { var mm = NOW.min + 60; r.date = remDate(0); r.time = p2(Math.floor(mm / 60)) + ':' + p2(mm % 60); }
+      else if (v2 === 'pm') { r.date = remDate(0); r.time = '15:00'; }
+      else if (v2 === 'am') { r.date = remDate(1); r.time = '07:00'; }
+      else { r.date = remDate(2); r.time = '08:00'; }
+      r.err = ''; render();
+    }
+    else if (act === 'opencatalog') { toast('Mở Catalog của shell để cài Lịch (mô phỏng)', { shell: true }); }
+    else if (act === 'remset') {
+      var rr = state.rem; rr.text = (document.getElementById('remText') && document.getElementById('remText').value.trim()) || rr.text;
+      if (state.ro) { rr.err = 'Chỉ đọc — chưa đặt được lời nhắc. (READ_ONLY)'; render(); return; }
+      rr.err = ''; rr.busy = true; render();
+      setTimeout(function () {
+        if (!state.rem) return;
+        rr.busy = false;
+        if (state.noCal) { render(); return; }
+        var nn = find(state.cur); if (nn) nn.reminder = { text: remShort(rr) };
+        state.rem = null; location.hash = 'S12'; render();
+        toast('Đã gửi tới Lịch · Mở?', { shell: true, label: 'Mở', act: function () { toast('Đã gửi calendar.event.open sang Lịch (mô phỏng)', { shell: true }); } });
+      }, 900);
+    }
+    else if (act === 'openincal') { toast('Đã gửi calendar.event.open sang Lịch (mô phỏng)', { shell: true }); }
     else if (act === 'dismiss') { state.banner = null; render(); }
     else if (act === 'sheet') { state.sheet = true; state.tagErr = ''; location.hash = 'S14'; render(); }
     else if (act === 'closesheet') { if (e.target.closest('.sheet') && t.className.indexOf('scrim') >= 0) return; state.sheet = false; state.tagErr = ''; location.hash = 'S12'; if (state.screen === 'S14') state.screen = 'S12'; render(); }
@@ -504,6 +577,7 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
   /* ---------- bảng Giả lập ---------- */
   function $(id) { return document.getElementById(id); }
   $('simOffline').addEventListener('change', function (e) { state.offline = e.target.checked; if (!state.offline) notes.concat(trash).forEach(function (x) { x.files.forEach(function (f) { f.pending = false; }); }); render(); });
+  $('simNoCal').addEventListener('change', function (e) { state.noCal = e.target.checked; render(); });
   $('simRO').addEventListener('change', function (e) { state.ro = e.target.checked; render(); });
   $('simClean').addEventListener('change', function (e) { state.clean = e.target.checked; render(); });
   $('simNewDevice').addEventListener('click', function () {
