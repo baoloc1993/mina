@@ -237,12 +237,12 @@ export function createMockHost(o: MockHostOptions): MockHost {
         // Kiểm TRƯỚC khi lưu bất kỳ tệp nào — một tệp hỏng thì không tệp nào được ghi (giống shell).
         for (const p of picked) {
           if (!matchesMime(opts.mime, p.mime)) throw new BridgeError('INVALID_REQUEST', `Chỉ nhận tệp loại ${opts.mime.join(', ')}`);
-          if (Math.floor((p.base64.length * 3) / 4) > MAX_FILE_BYTES) throw new BridgeError('INVALID_REQUEST', 'Tệp quá 50 MB');
+          if (b64Len(p.base64) > MAX_FILE_BYTES) throw new BridgeError('INVALID_REQUEST', 'Tệp quá 50 MB');
         }
         const out: { fileId: string; uri: string; mime: string; name: string; size: number }[] = [];
         for (const p of picked) {
           const s = await host.storage.put(p);
-          out.push({ fileId: s.fileId, uri: s.uri, mime: p.mime, name: p.name, size: Math.floor((p.base64.length * 3) / 4) });
+          out.push({ fileId: s.fileId, uri: s.uri, mime: p.mime, name: p.name, size: b64Len(p.base64) });
         }
         return { files: out };
       },

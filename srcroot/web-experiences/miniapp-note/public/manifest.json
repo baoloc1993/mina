@@ -1,0 +1,45 @@
+{
+  "id": "vn.app.note",
+  "name": "Ghi chú",
+  "version": "0.1.0",
+  "sdk": "^0.1.1",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "description": "Ghi chú gọn: viết được cả khi mất mạng, hai máy sửa chung không mất chữ, tìm không cần gõ dấu.",
+  "scopes": ["db.own", "core.tags:read", "core.tags:write", "storage.files", "ui.native"],
+  "tables": ["notes", "note_blocks", "note_tags", "note_files"],
+  "intents": {
+    "sends": [],
+    "receives": [
+      {
+        "type": "note.create",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "required": ["title"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "body": { "type": "string", "maxLength": 20000 },
+            "url": { "type": "string", "maxLength": 2048, "pattern": "^https?://" }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "note.open",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "required": ["noteId"],
+          "properties": {
+            "noteId": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" }
+          },
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "network": [],
+  "offline": true
+}
