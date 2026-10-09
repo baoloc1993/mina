@@ -119,6 +119,16 @@ async function main(): Promise<void> {
     const r2 = await upload(tokA, ids.blocks.slice(99, 119).map((id): Op => ({ op: "PATCH", table: BL, id, data: { deleted_at: t } })));
     check("khúc 2 (xoá phần còn lại) → ACCEPTED hết; xoá lại dòng đã xoá vẫn idempotent", results(r2).every((x) => x.status === "ACCEPTED"), js(r2.body).slice(0, 160));
 
+    section("Trần độ dài / giá trị hợp lệ ở server (dogfood breaker #1)");
+    const longTitle = await upload(tokA, [{ op: "PUT", table: N, id: uid(), data: { title: "x".repeat(300), pinned: 0, search_text: "", snippet: "" } }]);
+    check("tiêu đề 300 ký tự → REJECTED (SCHEMA)", results(longTitle)[0]?.status === "REJECTED", js(longTitle.body));
+    const badKind = await upload(tokA, [{ op: "PUT", table: BL, id: uid(), data: { note_id: ids.note, kind: "zzz", data: "AA==", size: 1 } }]);
+    check("note_blocks kind lạ → REJECTED", results(badKind)[0]?.status === "REJECTED", js(badKind.body));
+    const negSize = await upload(tokA, [{ op: "PUT", table: BL, id: uid(), data: { note_id: ids.note, kind: "update", data: "AA==", size: -5 } }]);
+    check("note_blocks size âm → REJECTED", results(negSize)[0]?.status === "REJECTED", js(negSize.body));
+    const okBlock = await upload(tokA, [{ op: "PUT", table: BL, id: uid(), data: { note_id: ids.note, kind: "update", data: "AA==", size: 1 } }]);
+    check("dòng hợp lệ vẫn được nhận (ràng buộc không chặn nhầm)", results(okBlock)[0]?.status === "ACCEPTED", js(okBlock.body));
+
     section("AC-1 · Hàm dọn thùng rác + lịch pg_cron");
     check("tenant không gọi được RPC purge_trashed_notes (không lộ ra PostgREST)", (await http(`${API}/rest/v1/rpc/purge_trashed_notes`, { method: "POST", token: tokA, body: "{}" })).status >= 400);
     const cron = await q("select schedule from cron.job where jobname = 'purge-trashed-notes'").catch(() => []);

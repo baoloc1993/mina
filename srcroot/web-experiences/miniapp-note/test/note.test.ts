@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { b64decode, docFromPlain, docFromUpdates, extractText, FRAGMENT } from '../src/crdt/doc';
 import { COMPACT_THRESHOLD, loadText, NoteSession } from '../src/crdt/session';
 import { attachImages, attachPdfs, detachAttachment, listAttachments } from '../src/data/files';
-import { blockSignatures, createFromIntent, createNote, daysLeft, getNote, listNotes, listTrash, purgeExpired, reindex, restoreNote, setPinned, setTitle, trashNote, TRASH_DAYS, DAY_MS } from '../src/data/repo';
+import { blockSignatures, createFromIntent, createNote, daysLeft, discardStaleEmpty, getNote, listNotes, listTrash, purgeExpired, reindex, restoreNote, setPinned, setTitle, trashNote, TRASH_DAYS, DAY_MS } from '../src/data/repo';
 import { attachTag, detachTag, ensureTag, groupTags, listTagGroups, tagsByNote } from '../src/data/tags';
 import { normalize, searchTerms } from '../src/search/normalize';
 import { newId } from '../src/sdk';
@@ -663,5 +663,28 @@ describe('AC-7: máy mới dựng lại đúng nội dung', () => {
     const copy = docFromUpdates([Buffer.from(u).toString('base64')]);
     expect(extractText(copy)).toBe(extractText(d));
     expect(b64decode(Buffer.from(u).toString('base64'))).toEqual(u);
+  });
+});
+
+describe('Dọn note rỗng bị bỏ lại (dogfood rushed #1)', () => {
+  test('chỉ dọn note rỗng thật đã tạo lâu; giữ note mới tạo, có tiêu đề, có nội dung, có tag', async () => {
+    const m = machine();
+    const now = Date.now();
+    const empty = await createNote(m.sdk);
+    const fresh = await createNote(m.sdk);
+    const titled = await createNote(m.sdk, newId(), 'Có tiêu đề');
+    const withBody = await createNote(m.sdk);
+    const s = await open(m, withBody);
+    typeParagraph(s.doc, 'có chữ');
+    await s.flush();
+    s.destroy();
+    const withTag = await createNote(m.sdk);
+    await attachTag(m.sdk, withTag, (await ensureTag(m.sdk, 'x')).group);
+    const old = new Date(now - 10 * 60_000).toISOString();
+    for (const id of [empty, titled, withBody, withTag]) m.db.run(`UPDATE ${PREFIX}_notes SET created_at = ? WHERE id = ?`, [old, id]);
+    expect(await discardStaleEmpty(m.sdk, now)).toBe(1);
+    const left = (await listNotes(m.sdk)).map((n) => n.id).sort();
+    expect(left).toEqual([fresh, titled, withBody, withTag].sort());
+    expect(empty).not.toBe(fresh);
   });
 });

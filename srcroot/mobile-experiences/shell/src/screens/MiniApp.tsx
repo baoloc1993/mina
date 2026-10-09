@@ -10,9 +10,11 @@ import { SyncChip } from '../ui/SyncChip';
 import { TitleBar } from '../ui/TitleBar';
 import { Txt } from '../ui/Txt';
 import { chipHeight, color, radius, space, stroke } from '../ui/theme';
+import { useKeyboardHeight } from '../ui/useKeyboardHeight';
 
 export function MiniAppScreen() {
   const rt = useRuntime();
+  const kb = useKeyboardHeight(); // bàn phím mở thì ẩn thanh "App đang chạy": nó chen giữa thanh công cụ của mini app và bàn phím (dogfood vòng 4, mobile #1)
   const blocked = rt.blockedOpen;
   const fgId = rt.foreground;
   const fgApp = rt.apps.find((a) => a.app_id === fgId);
@@ -35,7 +37,7 @@ export function MiniAppScreen() {
       >
         <LiveApps style={styles.live} />
       </AppFrame>
-      {rt.live.length >= 2 ? (
+      {rt.live.length >= 2 && !kb ? (
         <View style={styles.lives} accessibilityLabel={`App đang chạy: ${rt.live.length} trên 3`}>
           <Txt size="sm" tone="muted">
             App đang chạy:

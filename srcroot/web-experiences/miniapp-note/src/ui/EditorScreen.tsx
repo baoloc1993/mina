@@ -180,6 +180,16 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
     }
   };
 
+  // Rời màn: lưu nốt tiêu đề (đang debounce) TRƯỚC khi App nạp lại danh sách — không để danh sách nháy "Không có tiêu đề" (dogfood rushed #5)
+  const goBack = async () => {
+    if (titleTimer.current) {
+      clearTimeout(titleTimer.current);
+      titleTimer.current = null;
+      await setTitle(sdk, note.id, titleRef.current, session.text()).catch(() => undefined);
+    }
+    p.onBack();
+  };
+
   const onPin = () =>
     guard('write', async () => {
       setMenu(false);
@@ -240,7 +250,7 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
   return (
     <div className="screen">
       <div className="bar">
-        <button className="iconbtn" aria-label="Quay lại" onClick={p.onBack}>←</button>
+        <button className="iconbtn" aria-label="Quay lại" onClick={() => void goBack()}>←</button>
         <span className={`savebar${save === 'saving' ? ' busy' : save === 'bad' ? ' bad' : ''}`} role="status">
           {save === 'saving' ? 'Đang lưu…' : save === 'bad' ? 'Chưa lưu được — sẽ thử lại' : 'Đã lưu trên máy'}
         </span>

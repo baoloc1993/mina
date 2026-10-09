@@ -191,6 +191,7 @@ def seed() -> None:
     publish_fixture(stage_fixture("hello-cal", HELLO_CAL_FIXTURE), "hello-cal 0.1.0 (fixtures/miniapp-hello-cal)")
     publish_fixture(PRIVATE_A, "private-a", owner=USERS[0])
     publish_fixture(build_note_app(), "Ghi chú (vn.app.note, srcroot/web-experiences/miniapp-note/dist)")
+    sql("select public.ensure_note_limits()")  # trần độ dài / giá trị hợp lệ của bảng Ghi chú ở server (migration 20261009000003) — chạy lại sau publish dựng bảng
 
     tenants = {}
     for i, e in enumerate(USERS):

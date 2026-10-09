@@ -76,6 +76,21 @@ export async function discardIfEmpty(sdk: Sdk, id: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Khi mở app: dọn các note rỗng bị bỏ lại (bấm "Ghi chú mới" rồi tải lại / bị OS giết trước khi rời màn — dogfood rushed #1). Chỉ note
+ * rỗng THẬT (không tiêu đề, nội dung, tag, đính kèm) và đã tạo > `olderMs` để không đụng note vừa tạo ở máy khác. Trả số note đã dọn.
+ */
+export async function discardStaleEmpty(sdk: Sdk, now = Date.now(), olderMs = 120_000): Promise<number> {
+  const rows = (await sdk.db.query<{ id: string; created_at: string }>("SELECT id, created_at FROM notes WHERE title = '' AND snippet = '' AND trashed_at_ms IS NULL LIMIT 50", [])) as { id: string; created_at: string }[];
+  let n = 0;
+  for (const r of rows) {
+    const created = Date.parse(r.created_at);
+    if (!Number.isFinite(created) || now - created < olderMs) continue;
+    if (await discardIfEmpty(sdk, r.id)) n++;
+  }
+  return n;
+}
+
 /** Số ngày còn lại trước khi tự xoá hẳn (≥ 0). */
 export function daysLeft(trashedAtMs: number, now = Date.now()): number {
   return Math.max(0, Math.ceil((trashedAtMs + TRASH_DAYS * DAY_MS - now) / DAY_MS));

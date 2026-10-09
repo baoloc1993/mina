@@ -62,6 +62,11 @@ export function TagSheet({
               setMsg('');
             }}
             onKeyDown={(e) => e.key === 'Enter' && void add()}
+            onFocus={(e) => {
+              // bàn phím mở: kéo ô nhập + nút Thêm/Xong lên trên bàn phím (dogfood mobile #3)
+              const el = e.currentTarget;
+              setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350);
+            }}
           />
           {msg && <div className={msg === 'Đã có tag này — dùng lại' ? 'muted' : 'errtxt'}>{msg}</div>}
         </div>

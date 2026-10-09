@@ -60,6 +60,7 @@ export interface ListProps {
 }
 
 export function ListScreen(p: ListProps) {
+  const [searchFocus, setSearchFocus] = useState(false);
   const filtered = p.tagFilter ? p.notes.filter((n) => p.tagMap.get(n.id)?.some((g) => g.key === p.tagFilter)) : p.notes;
   const searching = p.terms.length > 0;
   const pinned = searching ? [] : filtered.filter((n) => n.pinned);
@@ -85,7 +86,7 @@ export function ListScreen(p: ListProps) {
         {p.syncing && <Banner>{p.syncing}</Banner>}
         <div className="search">
           <IconSearch />
-          <input className="input" type="search" placeholder="Tìm ghi chú" aria-label="Tìm ghi chú" autoComplete="off" value={p.q} onChange={(e) => p.setQ(e.target.value)} />
+          <input className="input" type="search" placeholder="Tìm ghi chú" aria-label="Tìm ghi chú" autoComplete="off" value={p.q} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} onChange={(e) => p.setQ(e.target.value)} />
           {p.q && (
             <button className="clr" aria-label="Xoá chữ tìm" onClick={() => p.setQ('')}>
               ×
@@ -127,7 +128,7 @@ export function ListScreen(p: ListProps) {
           Thùng rác ({p.trashCount})
         </button>
       </div>
-      <div className="footer">
+      <div className="footer" hidden={searchFocus /* đang gõ tìm: nhường chỗ cho kết quả khi bàn phím mở (dogfood mobile #6) */}>
         <button className={`btn${p.creating ? ' busy' : ''}`} disabled={p.readOnly || p.creating} onClick={p.onNew}>
           {p.creating ? 'Đang tạo…' : 'Ghi chú mới'}
         </button>

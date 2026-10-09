@@ -1,7 +1,7 @@
 // Ghi chú — vỏ ứng dụng: điều hướng S11 ↔ S12 ↔ S13, nhận intent `note.create` / `note.open`, lưu khi `suspend`, đồng bộ nền.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NoteSession } from '../crdt/session';
-import { blockSignatures, createFromIntent, createNote, discardIfEmpty, getNote, listNotes, listTrash, purgeExpired, reindex, restoreNote, type NoteRow } from '../data/repo';
+import { blockSignatures, createFromIntent, createNote, discardIfEmpty, discardStaleEmpty, getNote, listNotes, listTrash, purgeExpired, reindex, restoreNote, type NoteRow } from '../data/repo';
 import { listTagGroups, tagsByNote, type TagGroup } from '../data/tags';
 import { searchTerms } from '../search/normalize';
 import { errCode, UUID_RE, type Sdk } from '../sdk';
@@ -77,6 +77,7 @@ export function App({ sdk }: { sdk: Sdk }) {
   useEffect(() => {
     (async () => {
       await purgeExpired(sdk).catch(() => 0);
+      await discardStaleEmpty(sdk).catch(() => 0);
       await reload();
       await refreshStatus();
       await background();

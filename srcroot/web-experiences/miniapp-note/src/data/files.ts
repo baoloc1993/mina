@@ -25,6 +25,10 @@ const imageName = (_uri: string, i: number, d = new Date()) => `Ảnh ${pad(d.ge
 /** Chọn ảnh từ thư viện rồi đính vào note. Huỷ chọn → []. Lỗi `PERMISSION_DENIED` / `READ_ONLY` do SDK ném — để nơi gọi hiện câu rõ. */
 export async function attachImages(sdk: Sdk, noteId: string): Promise<AttachmentRow[]> {
   const { files } = await sdk.ui.pickImage({ multiple: true });
+  // Hộp chọn ảnh của shell chỉ cho ảnh; kiểm lại ở đây vì mock/thiết bị khác có thể trả loại khác (dogfood breaker #3).
+  if (files.some((f) => !f.mime.toLowerCase().startsWith('image/'))) {
+    throw Object.assign(new Error('Chỉ đính được ảnh ở mục này'), { code: 'INVALID_REQUEST' });
+  }
   const rows: AttachmentRow[] = files.map((f, i) => ({ id: newId(), note_id: noteId, file_id: f.fileId, kind: 'image', name: imageName(f.uri, i), mime: f.mime, size: null }));
   await link(sdk, rows);
   return rows;
