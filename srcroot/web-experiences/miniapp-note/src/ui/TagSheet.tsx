@@ -66,7 +66,7 @@ export function TagSheet({
           {msg && <div className={msg === 'Đã có tag này — dùng lại' ? 'muted' : 'errtxt'}>{msg}</div>}
         </div>
         <div className="row">
-          <button className={`btn sec${busy ? ' busy' : ''}`} disabled={busy} onClick={() => void add()}>
+          <button className={`btn sec${busy ? ' busy' : ''}`} disabled={busy || !name.trim()} onClick={() => void add()}>
             {busy ? 'Đang thêm…' : 'Thêm'}
           </button>
           <button className="btn" onClick={onClose}>

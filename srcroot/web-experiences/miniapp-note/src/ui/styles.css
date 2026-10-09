@@ -1,7 +1,8 @@
 /* Ghi chú — hình thức lấy TOÀN BỘ từ token chung (tokens.css = @platform/miniapp-sdk/tokens, DESIGN-SYSTEM.md §2).
    Không khai màu / cỡ chữ mới ở đây: chỉ var(--…). Khối C1–C3, C8–C11, C13 dùng lại; C17–C24 là khối của Ghi chú (§4). */
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+#root { height: var(--vvh, 100%); }
 body { font-family: var(--font-sans); font-size: var(--text-base); color: var(--color-text); background: var(--color-bg); -webkit-text-size-adjust: 100%; }
 button { font: inherit; color: inherit; cursor: pointer; }
 input { font: inherit; color: inherit; }
@@ -23,7 +24,7 @@ button:focus-visible, input:focus-visible, .ProseMirror:focus-visible { outline:
 .btn { min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); }
 .btn.sec { background: var(--color-bg); color: var(--color-primary); border: 1px solid var(--color-border); }
 .btn.danger { background: var(--color-danger); color: var(--color-on-primary); }
-.btn.slim { width: auto; min-height: 40px; padding: 0 var(--space-md); }
+.btn.slim { width: auto; min-height: var(--tap-min); padding: 0 var(--space-md); }
 .btn[disabled] { opacity: .4; cursor: default; }
 .btn.busy::before { content: ""; width: 18px; height: 18px; border: 2px solid var(--color-on-primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
 .btn.sec.busy::before { border-color: var(--color-primary); border-top-color: transparent; }
@@ -39,16 +40,20 @@ button:focus-visible, input:focus-visible, .ProseMirror:focus-visible { outline:
 .errtxt { color: var(--color-danger); font-size: var(--text-sm); margin-top: var(--space-xs); }
 .search { position: relative; }
 .search .input { padding-left: 44px; padding-right: 48px; background: var(--color-surface); }
+input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; } /* chỉ giữ MỘT nút xoá chữ (.clr) */
 .search .ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); pointer-events: none; }
 .search .clr { position: absolute; right: 0; top: 0; min-width: var(--tap-min); min-height: var(--tap-min); border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--text-lg); }
 
 /* C18 chip tag */
 .tags { display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; }
-.tags.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space-xs); }
-.tagchip { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 36px; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; color: var(--color-text); }
+.tags.scroll { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; padding-bottom: var(--space-xs); }
+.tagchip { position: relative; display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 36px; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; color: var(--color-text); }
 .tagchip.on { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+/* Vùng chạm ≥ --tap-min dù chip nhìn thấp 36px (dogfood vòng 4, picky): pseudo-element nới vùng bấm theo chiều dọc */
+button.tagchip::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--tap-min); transform: translateY(-50%); }
 .tagchip.mini { min-height: 24px; padding: 0 var(--space-sm); font-weight: 400; color: var(--color-text-muted); }
-.tagchip .rm { border: 0; background: transparent; padding: 0 0 0 var(--space-xs); color: var(--color-text-muted); font-size: var(--text-base); min-width: 28px; min-height: 28px; }
+.tagchip .rm { position: relative; border: 0; background: transparent; padding: 0 0 0 var(--space-xs); color: var(--color-text-muted); font-size: var(--text-base); min-width: 28px; min-height: 28px; }
+.tagchip .rm::after { content: ""; position: absolute; top: 50%; left: 50%; width: var(--tap-min); height: var(--tap-min); transform: translate(-50%, -50%); }
 .tagchip.on .rm { color: var(--color-on-primary); }
 
 /* C19 hàng ghi chú */
@@ -64,7 +69,7 @@ button:focus-visible, input:focus-visible, .ProseMirror:focus-visible { outline:
 .note .left { color: var(--color-text-muted); font-size: var(--text-sm); white-space: nowrap; }
 .note .left.soon { color: var(--color-warning); font-weight: 600; }
 .note .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-sm); flex: none; }
-.note .side .btn { min-height: 40px; }
+.note .side .btn { min-height: var(--tap-min); }
 mark { background: transparent; color: var(--color-primary); text-decoration: underline; font-weight: 700; }
 
 /* C8 banner */
@@ -89,7 +94,7 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
 .savebar { color: var(--color-text-muted); font-size: var(--text-sm); flex: 1; text-align: center; }
 .savebar.busy { color: var(--color-primary); }
 .savebar.bad { color: var(--color-warning); }
-.editor-wrap { min-height: 200px; flex: 1; }
+.editor-wrap { min-height: 200px; flex: 1 0 auto; } /* KHÔNG co lại: vùng soạn cao theo nội dung, .body cuộn — nếu co thì chữ tràn đè nút đính kèm (dogfood edge #1) */
 .ProseMirror { min-height: 200px; outline: 0; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
 .ProseMirror p { margin: 0 0 var(--space-sm); }
 .ProseMirror h2 { font-size: var(--text-lg); margin: var(--space-md) 0 var(--space-sm); }
@@ -105,19 +110,20 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
 .toolbar { display: flex; gap: var(--space-xs); padding: var(--space-xs) var(--space-sm); background: var(--color-bg); border-top: 1px solid var(--color-border); overflow-x: auto; flex: none; }
 .toolbar button { min-width: var(--tap-min); min-height: var(--tap-min); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text); font-weight: 700; }
 .toolbar button.on { background: var(--color-primary); color: var(--color-on-primary); }
+.ProseMirror[contenteditable="false"] ul[data-type="taskList"] li > label { pointer-events: none; opacity: .6; } /* chỉ xem: ô tick không bấm được và nhìn là không bấm được (C21) */
 .toolbar button[disabled] { opacity: .4; cursor: default; }
 
 /* C22 đính kèm */
 .atts { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
-.att { display: inline-flex; align-items: center; gap: var(--space-sm); min-height: 64px; padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-xs); background: var(--color-surface); border-radius: var(--radius-md); font-size: var(--text-sm); max-width: 100%; }
-.att .thumb { width: 56px; height: 56px; border-radius: var(--radius-md); background: var(--color-primary); color: var(--color-on-primary); display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; overflow: hidden; }
+.att { display: inline-flex; align-items: center; gap: var(--space-sm); min-height: 72px; padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-xs); background: var(--color-surface); border-radius: var(--radius-md); font-size: var(--text-sm); max-width: 100%; }
+.att .thumb { width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--color-primary); color: var(--color-on-primary); display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; overflow: hidden; }
 .att .thumb img { width: 100%; height: 100%; object-fit: cover; }
-.att .thumb.pdf { background: var(--color-danger); }
+.att .thumb.pdf { background: var(--color-text-muted); } /* đỏ (--color-danger) là màu lỗi — tệp bình thường không được đỏ */
 .att .thumb.load { background: var(--color-surface); animation: blink 1.2s infinite; }
 .att .meta { min-width: 0; }
 .att .nm { font-weight: 600; display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .att .wait { width: 10px; height: 10px; border-radius: 50%; background: var(--color-warning); flex: none; }
-.att .rm { border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--text-lg); min-width: 40px; min-height: 40px; }
+.att .rm { border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--text-lg); min-width: var(--tap-min); min-height: var(--tap-min); }
 .addrow { display: flex; gap: var(--space-sm); }
 .addrow .btn { flex: 1; }
 
@@ -138,4 +144,4 @@ mark { background: transparent; color: var(--color-primary); text-decoration: un
 .toast { position: absolute; left: var(--space-md); right: var(--space-md); bottom: 84px; z-index: 20; display: flex; gap: var(--space-sm); align-items: center; background: var(--color-text); color: var(--color-bg); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); font-size: var(--text-sm); box-shadow: var(--shadow); }
 .toast span { flex: 1; }
 .toast.err { background: var(--color-danger); color: var(--color-on-primary); }
-.toast button { border: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline; min-height: 36px; }
+.toast button { border: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline; min-height: var(--tap-min); min-width: var(--tap-min); }

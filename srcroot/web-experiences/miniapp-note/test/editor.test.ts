@@ -85,3 +85,24 @@ describe('TipTap + Yjs', () => {
     eb.destroy();
   });
 });
+
+describe('Checklist bền khi sửa tiếp (dogfood newbie #4)', () => {
+  test('tick, chọn một từ, đậm, gõ thêm → dòng vẫn là taskItem và còn trạng thái tick', () => {
+    const doc = new Y.Doc();
+    const ed = makeEditor(doc);
+    ed.commands.setContent('<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>mua sua</p></li></ul>');
+    // chọn chữ "sua" (vị trí trong taskItem > paragraph) rồi đậm và gõ thêm
+    const text = ed.state.doc.textContent;
+    const from = ed.state.doc.textBetween(0, ed.state.doc.content.size, '\n').indexOf('sua');
+    expect(text).toBe('mua sua');
+    ed.commands.setTextSelection({ from: 4 + from, to: 4 + from + 3 });
+    ed.commands.toggleBold();
+    ed.commands.setTextSelection(ed.state.doc.content.size - 2);
+    ed.commands.insertContent(' NHO');
+    const json = JSON.stringify(ed.getJSON());
+    expect(json).toContain('"taskList"');
+    expect(json).toContain('"checked":true');
+    expect(extractText(doc)).toBe('mua sua NHO');
+    ed.destroy();
+  });
+});

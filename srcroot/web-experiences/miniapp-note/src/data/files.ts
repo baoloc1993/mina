@@ -18,7 +18,9 @@ export async function listAttachments(sdk: Sdk, noteId: string): Promise<Attachm
   return (await sdk.db.query<AttachmentRow>('SELECT id, note_id, file_id, kind, name, mime, size FROM note_files WHERE note_id = ? ORDER BY created_at, id', [noteId])) as AttachmentRow[];
 }
 
-const imageName = (uri: string, i: number) => decodeURIComponent(uri.split('/').pop() ?? '') || `Ảnh ${i + 1}`;
+const pad = (n: number) => String(n).padStart(2, '0');
+/** Tên hiển thị của ảnh: SDK không trả tên tệp (uri chỉ là uuid hoặc data:) nên đặt theo giờ chọn. */
+const imageName = (_uri: string, i: number, d = new Date()) => `Ảnh ${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}${i ? ` (${i + 1})` : ''}`;
 
 /** Chọn ảnh từ thư viện rồi đính vào note. Huỷ chọn → []. Lỗi `PERMISSION_DENIED` / `READ_ONLY` do SDK ném — để nơi gọi hiện câu rõ. */
 export async function attachImages(sdk: Sdk, noteId: string): Promise<AttachmentRow[]> {

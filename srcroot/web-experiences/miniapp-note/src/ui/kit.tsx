@@ -87,7 +87,7 @@ export function Toast({ toast, onClose }: { toast: ToastState | null; onClose: (
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (toast) timer.current = setTimeout(onClose, 4000);
+    if (toast) timer.current = setTimeout(onClose, toast.label ? 8000 : 4000); // có nút hành động (Hoàn tác) thì giữ lâu hơn cho người chậm tay
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };

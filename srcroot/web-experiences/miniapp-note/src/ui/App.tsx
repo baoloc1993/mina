@@ -27,6 +27,8 @@ export function App({ sdk }: { sdk: Sdk }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [dialog, setDialog] = useState<{ title: string; text: string; buttons: { label: string; run: () => void; secondary?: boolean }[] } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const terms = searchTerms(q);
   const termsKey = terms.join(' ');
   const session = useRef<NoteSession | null>(null);
@@ -87,6 +89,7 @@ export function App({ sdk }: { sdk: Sdk }) {
   // thấy dữ liệu từ máy khác: sự kiện sync + thăm dò
   useEffect(() => {
     const tick = () => {
+      if (document.hidden) return; // app nằm nền thì không thăm dò (đỡ pin, đỡ N+1 khi nhiều lời gọi dồn)
       void reload().catch(() => undefined);
       void refreshStatus();
       void background();
@@ -160,11 +163,17 @@ export function App({ sdk }: { sdk: Sdk }) {
   );
 
   const newNote = async () => {
+    if (creatingRef.current) return; // bấm đúp không được đẻ hai ghi chú (C1 "đang xử lý")
+    creatingRef.current = true;
+    setCreating(true);
     try {
       const id = await createNote(sdk);
       open(id, 'list');
     } catch (e) {
       showToast({ msg: friendly(e), err: true });
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
     }
   };
 
@@ -229,6 +238,7 @@ export function App({ sdk }: { sdk: Sdk }) {
         tagFilter={tagFilter}
         setTagFilter={setTagFilter}
         hasAny={hasAny}
+        creating={creating}
         syncing={syncing}
         onOpen={(id) => open(id, 'list')}
         onNew={() => void newNote()}

@@ -52,6 +52,7 @@ export interface ListProps {
   tagFilter: string;
   setTagFilter: (k: string) => void;
   hasAny: boolean;
+  creating: boolean;
   syncing: string | null;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -104,7 +105,7 @@ export function ListScreen(p: ListProps) {
         ) : !filtered.length ? (
           <Empty glyph="?">
             Không có ghi chú nào khớp
-            {searching && <div className="muted">Bạn không cần gõ dấu — "ghi chu" vẫn tìm ra "Ghi chú".</div>}
+            {searching && <div className="muted">Thử bớt từ khoá hoặc bỏ lọc tag. Không cần gõ dấu.</div>}
           </Empty>
         ) : (
           <>
@@ -127,8 +128,8 @@ export function ListScreen(p: ListProps) {
         </button>
       </div>
       <div className="footer">
-        <button className="btn" disabled={p.readOnly} onClick={p.onNew}>
-          Ghi chú mới
+        <button className={`btn${p.creating ? ' busy' : ''}`} disabled={p.readOnly || p.creating} onClick={p.onNew}>
+          {p.creating ? 'Đang tạo…' : 'Ghi chú mới'}
         </button>
       </div>
     </div>

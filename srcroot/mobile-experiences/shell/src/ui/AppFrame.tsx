@@ -8,7 +8,9 @@ import { Button } from './Button';
 import { Glyph } from './Glyph';
 import { Txt } from './Txt';
 import { errorSentence } from './errorText';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, glyphBig, space } from './theme';
+import { useKeyboardHeight } from './useKeyboardHeight';
 
 export function AppSplash({ appId, name, privateApp }: { appId: string; name: string; privateApp?: boolean }) {
   return (
@@ -45,6 +47,10 @@ interface FrameProps {
 }
 
 export function AppFrame({ readOnly, blocked, splash, children }: FrameProps) {
+  // Bàn phím mở: WebView tự co theo bàn phím nhưng đáy của nó vẫn thấp hơn mép trên bàn phím đúng bằng thanh điều hướng (đo trên emulator,
+  // dogfood vòng 4: thanh công cụ của Ghi chú bị che nửa). Chừa thêm đúng phần vùng an toàn dưới khi bàn phím đang mở.
+  const kb = useKeyboardHeight();
+  const insets = useSafeAreaInsets();
   return (
     <View style={styles.frame}>
       {readOnly ? (
@@ -52,7 +58,7 @@ export function AppFrame({ readOnly, blocked, splash, children }: FrameProps) {
           <Banner tone="warning" text="Chỉ đọc — thay đổi sẽ được giữ và gửi khi xác minh lại" />
         </View>
       ) : null}
-      <View style={styles.frame}>{children}</View>
+      <View style={[styles.frame, kb ? { paddingBottom: insets.bottom } : null]}>{children}</View>
       {splash && !blocked ? (
         <View style={[StyleSheet.absoluteFill, styles.block]}>
           <AppSplash {...splash} />

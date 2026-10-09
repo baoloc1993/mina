@@ -60,7 +60,7 @@ export function EditorScreen(p: EditorProps) {
           <button className="iconbtn" aria-label="Quay lại" onClick={p.onBack}>←</button>
           <h1 className="title small">Ghi chú</h1>
         </div>
-        <div className="body"><div className="skel" aria-busy="true"><div /><div /></div></div>
+        <div className="body"><div className="skel" aria-busy="true"><div /><div /><div /></div></div>
       </div>
     );
   }
@@ -133,6 +133,7 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
   useEffect(() => {
     let stop = false;
     const tick = async () => {
+      if (document.hidden) return;
       try {
         const applied = await session.pull();
         if (applied > 0 && !stop) setBanner('Đã hợp nhất thay đổi từ máy khác — chữ của cả hai máy đều còn.');
