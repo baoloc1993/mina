@@ -1,17 +1,19 @@
 {
   "id": "vn.app.hello",
   "name": "Hello",
-  "version": "0.4.3",
+  "version": "0.6.0",
   "sdk": "^0.1",
   "entry": "index.html",
   "icon": "icon.png",
-  "description": "App mẫu: ghi chú nhanh, tag dùng chung, gửi nhắc sang Hello Lịch.",
+  "description": "App mẫu: ghi chú nhanh, tag dùng chung, gửi nhắc sang Hello Lịch và gửi vào Ghi chú.",
   "scopes": ["db.own", "core.tags:write", "intent.send", "net", "ui.native", "storage.files", "auth.token"],
   "tables": ["items", "drafts"],
   "intents": {
     "sends": [
       { "type": "cal.reminder.create", "version": "1" },
-      { "type": "cal.event.open", "version": "1" }
+      { "type": "cal.event.open", "version": "1" },
+      { "type": "note.create", "version": "1" },
+      { "type": "note.open", "version": "1" }
     ],
     "receives": []
   },

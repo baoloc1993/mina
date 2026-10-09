@@ -1,7 +1,7 @@
 {
   "id": "vn.app.hello",
   "name": "Hello",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "sdk": "^0.1",
   "entry": "index.html",
   "description": "Bản thử có migration cố ý lỗi trên SQLite (kiểm rollback gói, AC-3).",

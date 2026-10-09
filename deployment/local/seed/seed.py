@@ -2,6 +2,8 @@
 
   python deployment/local/seed/seed.py          # user + khoá ký thử + publish hello / private-a + cài + sync rules + 20 mục hello mỗi tenant
   python deployment/local/seed/seed.py --clean  # xoá mục + 2 user thử (cascade installations/devices); registry giữ nguyên
+  python deployment/local/seed/seed.py --notes  # (vòng 4, dogfood đợt 2) thêm: cài Ghi chú cho cả 2 tenant + ~30 ghi chú mẫu (có note 250 update,
+                                                #   2 note thùng rác: còn 3 ngày + quá hạn). Mặc định KHÔNG làm — đợt 1 cần DB sạch (chưa có note).
 
 Registry sau seed (vòng 3): hello (bản trong fixtures/miniapp-hello, published, cài cho cả 2 tenant) · hello-cal 0.1.0 (published,
 KHÔNG cài sẵn — cài từ launcher) · vn.app.private-a 0.0.1 (riêng của tenant-a, cài cho tenant-a) · hello 0.5.0 DRAFT có migration
@@ -23,6 +25,8 @@ FIXTURES = os.path.join(ROOT, "srcroot", "mobile-experiences", "shell", "fixture
 HELLO_CAL_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-cal")
 HELLO_BAD_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-bad-migration")
 PRIVATE_A = os.path.join(BACKEND, "fixtures", "private-a")
+NOTE_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-note")
+NOTE_DIST = os.path.join(NOTE_APP, "dist")
 BUILD = os.path.join(ROOT, "deployment", "local", ".build")
 SYNC_RULES = os.path.join(BACKEND, "powersync", "sync-rules.yaml")
 DB_CONTAINER = "supabase_db_platform-backend"
@@ -150,6 +154,33 @@ CORE_TAGS = [
 ]
 
 
+def build_note_app() -> str | None:
+    """`npm run build` của Ghi chú (nếu chưa có dist/) rồi trả thư mục dist để publish. Thiếu mã nguồn → None."""
+    if not os.path.isfile(os.path.join(NOTE_APP, "package.json")):
+        return None
+    if not os.path.isfile(os.path.join(NOTE_DIST, "manifest.json")):
+        print("  dựng Ghi chú (npm run build)…")
+        r = subprocess.run(["npm", "run", "--silent", "build"], cwd=NOTE_APP, shell=(os.name == "nt"), capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0:
+            sys.exit(f"build Ghi chú lỗi: {(r.stderr or r.stdout).strip()[-600:]}")
+    return NOTE_DIST
+
+
+def seed_notes(tenants: dict) -> None:
+    """Dogfood đợt 2: cài Ghi chú cho cả 2 tenant + ghi chú mẫu. Chạy sau khi sync rules đã có bucket của Ghi chú."""
+    for e, tid in tenants.items():
+        if not sql(f"select 1 from installations where tenant_id = '{tid}' and app_id = 'vn.app.note' and enabled"):
+            sql(f"select public._install_app('{tid}', 'vn.app.note')")
+        count = "30" if e == USERS[0] else "6"
+        gen = subprocess.run(["node", os.path.join("scripts", "seed-notes.mjs"), tid, count], cwd=NOTE_APP, capture_output=True, text=True, encoding="utf-8")
+        if gen.returncode != 0:
+            sys.exit(f"sinh dữ liệu ghi chú lỗi: {gen.stderr.strip()}")
+        r = subprocess.run(["docker", "exec", "-i", DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q"], input=gen.stdout, capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0:
+            sys.exit(f"nạp ghi chú mẫu lỗi: {r.stderr.strip()}")
+        print(f"  {e}: cài vn.app.note + {gen.stderr.strip()}")
+
+
 def seed() -> None:
     env = sb_env()
     for e in USERS:
@@ -159,6 +190,7 @@ def seed() -> None:
     publish_fixture(stage_fixture("hello", HELLO_FIXTURE), "hello (fixtures/miniapp-hello)")
     publish_fixture(stage_fixture("hello-cal", HELLO_CAL_FIXTURE), "hello-cal 0.1.0 (fixtures/miniapp-hello-cal)")
     publish_fixture(PRIVATE_A, "private-a", owner=USERS[0])
+    publish_fixture(build_note_app(), "Ghi chú (vn.app.note, srcroot/web-experiences/miniapp-note/dist)")
 
     tenants = {}
     for i, e in enumerate(USERS):
@@ -214,6 +246,9 @@ def seed() -> None:
             f"select gen_random_uuid(), '{tid}', 'Mục mẫu {tenant}-' || n, (n % 5 = 0) from generate_series(1, 20) n"
         )
         print(f"  tenant {tenant} ({e}): 20 mục")
+
+    if "--notes" in sys.argv:
+        seed_notes(tenants)
 
 
 if __name__ == "__main__":

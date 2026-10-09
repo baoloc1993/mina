@@ -8,7 +8,8 @@
     "test:cli": "node --test \"scripts/lib/*.test.ts\"",
     "test:functions": "deno test --no-lock supabase/functions/",
     "typecheck": "tsc --noEmit -p scripts",
-    "accept": "node scripts/acceptance.ts"
+    "accept": "node scripts/acceptance.ts",
+    "accept:notes": "node scripts/accept-notes.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

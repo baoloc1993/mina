@@ -76,6 +76,16 @@
   <button id="i-unknown">Intent không khai</button>
 </div>
 
+<h2>Gửi vào Ghi chú</h2>
+<div class="group">
+  <button id="nt-create">Gửi vào Ghi chú</button>
+  <button id="nt-resend">Gửi lại cùng id</button>
+  <button id="nt-open">Mở ghi chú vừa gửi</button>
+  <button id="nt-open-none">Mở ghi chú không có</button>
+  <button id="nt-bad">Gửi payload sai</button>
+</div>
+<div class="muted" id="nt-last">Chưa gửi ghi chú nào</div>
+
 <h2>Tag dùng chung</h2>
 <div class="group">
   <button id="t-create">Tạo tag việc nhà</button>
@@ -225,6 +235,19 @@
     show('tạo nhắc', m.intent.send('cal.reminder.create', { title: t, at: Date.now() + 60000 }, { mode: 'create' }));
   };
   $('i-open').onclick = function () { show('mở lịch', m.intent.send('cal.event.open', { title: 'Từ Hello' }, { mode: 'open' })); };
+  // ---------- Ghi chú (intent note.* — AC-6 vòng 4): id do BÊN GỬI sinh, SDK không trả kết quả ----------
+  var lastNote = null;
+  function noteBody() { return { title: titleEl.value.trim() || 'Gửi từ Hello', body: 'Nội dung gửi từ Hello lúc ' + new Date().toLocaleTimeString('vi-VN') + '\nDòng thứ hai có dấu: đăng ký', url: 'https://vnexpress.net/bai-bao-mau' }; }
+  function sendNote(id) {
+    var p = noteBody(); p.id = id;
+    return show('gửi vào Ghi chú', m.intent.send('note.create', p, { mode: 'create' })).then(function (r) { if (!r) return; lastNote = id; $('nt-last').textContent = 'Ghi chú vừa gửi: ' + id; });
+  }
+  $('nt-create').onclick = function () { sendNote(uuid()); };
+  $('nt-resend').onclick = function () { if (!lastNote) return toast('Chưa gửi ghi chú nào'); sendNote(lastNote); };
+  $('nt-open').onclick = function () { if (!lastNote) return toast('Chưa gửi ghi chú nào'); show('mở ghi chú', m.intent.send('note.open', { noteId: lastNote }, { mode: 'open' })); };
+  $('nt-open-none').onclick = function () { show('mở ghi chú không có', m.intent.send('note.open', { noteId: uuid() }, { mode: 'open' })); };
+  $('nt-bad').onclick = function () { show('ghi chú payload sai', m.intent.send('note.create', { body: 'thiếu tiêu đề' }, { mode: 'create' })); };
+
   $('i-bad').onclick = function () { show('payload sai', m.intent.send('cal.reminder.create', { title: 123 }, { mode: 'create' })); };
   $('i-unknown').onclick = function () { show('intent không khai', m.intent.send('cal.khong.khai', { a: 1 }, { mode: 'create' })); };
 
