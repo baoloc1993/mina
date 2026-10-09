@@ -186,7 +186,10 @@ export function App({ sdk }: { sdk: Sdk }) {
   // ---- thao tác ----
   const afterWrite = useCallback((force?: Iterable<string>) => refresh({ reconcile: true, force }), [refresh]);
 
+  const toggling = useRef(new Set<string>());
   const toggleDone = async (o: Occurrence) => {
+    if (toggling.current.has(o.key)) return; // đang xử lý lần chạm trước — không chồng lệnh
+    toggling.current.add(o.key);
     try {
       if (o.recurring) {
         if (o.done) await clearOverride(sdk, o.eventId, o.occDate, 'done');
@@ -195,6 +198,8 @@ export function App({ sdk }: { sdk: Sdk }) {
       await afterWrite();
     } catch (e) {
       fail(e);
+    } finally {
+      toggling.current.delete(o.key);
     }
   };
 

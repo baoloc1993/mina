@@ -17,7 +17,7 @@ export function parseIntent(type: string, payload: unknown): ParsedIntent {
     const { id, title, at, ref } = p;
     if (typeof id !== 'string' || !UUID_RE.test(id)) return { kind: 'unknown' };
     if (typeof title !== 'string' || !title.trim() || title.length > 200) return { kind: 'unknown' };
-    if (!(typeof at === 'number' && Number.isFinite(at)) && !isLocal(at)) return { kind: 'unknown' };
+    if (!(typeof at === 'number' && Number.isFinite(at) && at >= 946_684_800_000 && at <= 4_102_444_800_000) && !isLocal(at)) return { kind: 'unknown' };
     const out: ReminderPayload = { id, title: title.trim(), at: at as string | number };
     if (ref && typeof ref === 'object') {
       const r = ref as Record<string, unknown>;

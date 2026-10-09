@@ -102,9 +102,14 @@ export function DetailScreen(p: Props) {
             <button className="btn" disabled={ro} onClick={p.onDone}>
               Đánh dấu xong
             </button>
-            <button className="btn sec" disabled={ro} onClick={() => (occ.snoozeUntilMs !== null ? p.onUnsnooze?.() : setSnoozing(true))}>
-              {occ.snoozeUntilMs !== null ? 'Bỏ hoãn' : 'Hoãn'}
+            <button className="btn sec" disabled={ro} onClick={() => setSnoozing(true)}>
+              {occ.snoozeUntilMs !== null ? 'Hoãn lại' : 'Hoãn'}
             </button>
+            {occ.snoozeUntilMs !== null && (
+              <button className="btn sec" disabled={ro} onClick={p.onUnsnooze}>
+                Bỏ hoãn
+              </button>
+            )}
           </div>
         )}
       </div>

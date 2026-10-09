@@ -61,8 +61,18 @@ export async function setDoneAt(sdk: Sdk, id: string, at: number | null): Promis
   await sdk.db.execute('UPDATE events SET done_at_ms = ? WHERE id = ?', [at, id]);
 }
 
+// Ghi ngoại lệ phải TUẦN TỰ: bấm tick dồn dập mà không có hàng đợi thì mỗi lần tự "kiểm có dòng chưa" rồi cùng chèn → nhiều dòng sống cho một (mục, ngày, loại).
+let overrideChain: Promise<unknown> = Promise.resolve();
+const serial = <T>(fn: () => Promise<T>): Promise<T> => {
+  const run = overrideChain.then(fn, fn);
+  overrideChain = run.catch(() => undefined);
+  return run;
+};
+
 /** Ghi / thay một ngoại lệ (event_id, occ_date, action). Có sẵn dòng ở máy này thì sửa dòng id nhỏ nhất, không thì chèn dòng mới. */
-export async function putOverride(sdk: Sdk, eventId: string, occDate: Ymd, action: OverrideAction, patch: object = {}): Promise<void> {
+export const putOverride = (sdk: Sdk, eventId: string, occDate: Ymd, action: OverrideAction, patch: object = {}): Promise<void> => serial(() => putOverrideNow(sdk, eventId, occDate, action, patch));
+
+async function putOverrideNow(sdk: Sdk, eventId: string, occDate: Ymd, action: OverrideAction, patch: object): Promise<void> {
   const rows = (await sdk.db.query<{ id: string }>('SELECT id FROM event_overrides WHERE event_id = ? AND occ_date = ? AND action = ? ORDER BY id', [eventId, occDate, action])) as { id: string }[];
   const json = JSON.stringify(patch);
   if (rows[0]) await sdk.db.execute('UPDATE event_overrides SET patch = ? WHERE id = ?', [json, rows[0].id]);
@@ -70,9 +80,10 @@ export async function putOverride(sdk: Sdk, eventId: string, occDate: Ymd, actio
 }
 
 /** Bỏ ngoại lệ (xoá mềm mọi dòng trùng) — "bỏ đánh dấu xong", "bỏ hoãn". */
-export async function clearOverride(sdk: Sdk, eventId: string, occDate: Ymd, action: OverrideAction): Promise<void> {
-  await sdk.db.execute('DELETE FROM event_overrides WHERE event_id = ? AND occ_date = ? AND action = ?', [eventId, occDate, action]);
-}
+export const clearOverride = (sdk: Sdk, eventId: string, occDate: Ymd, action: OverrideAction): Promise<void> =>
+  serial(async () => {
+    await sdk.db.execute('DELETE FROM event_overrides WHERE event_id = ? AND occ_date = ? AND action = ?', [eventId, occDate, action]);
+  });
 
 export async function editThisOnly(sdk: Sdk, eventId: string, occDate: Ymd, patch: EditPatch): Promise<void> {
   await putOverride(sdk, eventId, occDate, 'edit', patch);

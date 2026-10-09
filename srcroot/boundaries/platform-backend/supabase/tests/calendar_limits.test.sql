@@ -99,7 +99,7 @@ select lives_ok($$select pg_temp.ov('skip')$$, 'overrides: skip hợp lệ');
 select lives_ok($$select pg_temp.ov('edit', '{"start_local":"2026-10-20T10:00"}')$$, 'overrides: edit hợp lệ');
 select lives_ok($$select pg_temp.ov('done', '{"at_ms":1}')$$, 'overrides: done hợp lệ');
 select lives_ok($$select pg_temp.ov('snooze', '{"until_local":"2026-10-20T11:00"}')$$, 'overrides: snooze hợp lệ');
-select lives_ok($$select pg_temp.ov('skip', repeat('p', 4000))$$, 'overrides: patch đúng 4000 ký tự được nhận');
+select lives_ok($$select pg_temp.ov('skip', '{' || repeat('p', 3999))$$, 'overrides: patch đúng 4000 ký tự được nhận');
 select throws_ok($$select pg_temp.ov('delete')$$, '23514', null, 'overrides: action lạ bị từ chối');
 select throws_ok($$select pg_temp.ov('edit', repeat('p', 4001))$$, '23514', null, 'overrides: patch 4001 ký tự bị từ chối');
 select throws_ok($$select pg_temp.ov('skip', '{}', '2026-10-20T00:00')$$, '23514', null, 'overrides: occ_date > 10 ký tự bị từ chối');

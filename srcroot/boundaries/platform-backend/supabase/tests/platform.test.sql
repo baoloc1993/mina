@@ -243,7 +243,11 @@ begin
             vals := vals || ', ' || case when c.data_type in ('integer', 'bigint', 'smallint', 'numeric') then '0'
                                          when c.data_type = 'uuid' then 'gen_random_uuid()'
                                          when c.data_type like 'timestamp%' then 'now()'
-                                         when c.data_type = 'boolean' then 'false' else quote_literal('x') end;
+                                         when c.data_type = 'boolean' then 'false'
+                                         when c.column_name = 'start_local' then quote_literal('2026-10-09T07:00')
+                                         when c.column_name = 'occ_date' then quote_literal('2026-10-09')
+                                         when c.column_name = 'patch' then quote_literal('{}')
+                                         when c.column_name = 'action' then quote_literal('skip') else quote_literal('x') end;
           end loop;
           execute format('insert into public.%I (%s) values (%s)', r.t, cols, vals);
         end;

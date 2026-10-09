@@ -343,3 +343,34 @@ describe('múi giờ máy', () => {
 });
 
 void noteManifest;
+
+describe('ghi ngoại lệ tuần tự (rushed: tick dồn dập)', () => {
+  it('20 lần done/clear chạy song song không để lại nhiều dòng sống cho cùng (mục, ngày, loại)', async () => {
+    const m = mk();
+    const e = ev({ kind: 'reminder', title: 'X', start_local: '2026-10-09T07:00', repeat_unit: 'day' });
+    await insertEvent(m.sdk, e);
+    const jobs: Promise<void>[] = [];
+    for (let i = 0; i < 20; i++) jobs.push(i % 2 === 0 ? putOverride(m.sdk, e.id, '2026-10-09', 'done', { at_ms: i }) : clearOverride(m.sdk, e.id, '2026-10-09', 'done'));
+    await Promise.all(jobs);
+    const live = m.db.all(`SELECT id FROM app_vn_app_calendar_event_overrides WHERE deleted_at IS NULL AND action = 'done'`, []) as unknown[];
+    expect(live.length).toBeLessThanOrEqual(1);
+    for (let i = 0; i < 5; i++) await putOverride(m.sdk, e.id, '2026-10-09', 'snooze', { until_local: `2026-10-09T1${i}:00` });
+    expect((m.db.all(`SELECT id FROM app_vn_app_calendar_event_overrides WHERE deleted_at IS NULL AND action = 'snooze'`, []) as unknown[]).length).toBe(1);
+  });
+});
+
+describe('siết đầu vào intent (breaker)', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  it('at số âm / quá lớn / chuỗi không phải ngày thật bị từ chối (schema + parse)', () => {
+    const ajv = new Ajv({ strict: false });
+    const v = ajv.compile(manifest.intents!.receives!.find((r) => r.type === 'calendar.reminder.create')!.schema);
+    for (const at of [-5, 1e300, '2026-13-45T99:99', '2026-02-30T10:00', '2026-10-12T24:00']) {
+      expect(parseIntent('calendar.reminder.create', { id, title: 'x', at }).kind, String(at)).toBe('unknown');
+    }
+    expect(v({ id, title: 'x', at: -5 })).toBe(false);
+    expect(v({ id, title: 'x', at: 1e300 })).toBe(false);
+    expect(v({ id, title: '   ', at: '2026-10-12T07:00' })).toBe(false);
+    expect(v({ id, title: 'x', at: '2026-10-12T07:00' })).toBe(true);
+    expect(parseIntent('calendar.reminder.create', { id, title: 'x', at: '2026-10-12T07:00' }).kind).toBe('reminder.create');
+  });
+});

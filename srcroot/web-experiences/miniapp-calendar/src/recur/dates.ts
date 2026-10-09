@@ -12,8 +12,13 @@ export function parseYmd(s: Ymd): { y: number; m: number; d: number } {
   return { y, m, d };
 }
 
-export const isYmd = (s: unknown): s is Ymd => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
-export const isLocal = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s);
+export const isYmd = (s: unknown): s is Ymd => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) && fromDayNumber(dayNumber(s)) === s;
+export const isLocal = (s: unknown): s is string => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return false;
+  const h = Number(s.slice(11, 13));
+  const mi = Number(s.slice(14, 16));
+  return h < 24 && mi < 60 && isYmd(s.slice(0, 10)) && fromDayNumber(dayNumber(s.slice(0, 10))) === s.slice(0, 10);
+};
 
 /** Số ngày kể từ 1970-01-01 (UTC) của một ngày dương. */
 export function dayNumber(s: Ymd): number {

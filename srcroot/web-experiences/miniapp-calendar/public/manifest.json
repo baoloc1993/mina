@@ -1,7 +1,7 @@
 {
   "id": "vn.app.calendar",
   "name": "Lịch",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "sdk": "^0.1.1",
   "entry": "index.html",
   "icon": "icon.png",
@@ -42,7 +42,8 @@
             "title": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 200
+              "maxLength": 200,
+              "pattern": "\\S"
             },
             "at": {
               "oneOf": [
@@ -51,7 +52,9 @@
                   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
                 },
                 {
-                  "type": "number"
+                  "type": "number",
+                  "minimum": 946684800000,
+                  "maximum": 4102444800000
                 }
               ]
             },
