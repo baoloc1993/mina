@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { defaultText, TITLE_MAX } from '../reminder/send';
 import { formatSummary, isPast, joinAt, PAST_WARNING, quickOptions, splitAt } from '../reminder/time';
 import { newId } from '../sdk';
-import { Banner } from './kit';
+import { Banner, DateField, TimeField } from './kit';
 
 export interface ReminderSubmit {
   /** Giữ nguyên giữa các lần bấm lại trong cùng một lần mở sheet — Lịch không tạo trùng. */
@@ -66,8 +66,8 @@ export function ReminderSheet({
         </div>
         <div>
           <div className="two">
-            <input className="input" type="date" value={date} aria-label="Ngày nhắc" onChange={(e) => (setDate(e.target.value), setErr(''))} />
-            <input className="input" type="time" value={time} aria-label="Giờ nhắc" onChange={(e) => (setTime(e.target.value), setErr(''))} />
+            <DateField value={date} label="Ngày nhắc" onChange={(v) => (setDate(v), setErr(''))} />
+            <TimeField value={time} label="Giờ nhắc" onChange={(v) => (setTime(v), setErr(''))} />
           </div>
           <div className="muted sum" role="status">{formatSummary(date, time)}</div>
           {past && <div className="warntxt" role="alert">{PAST_WARNING}</div>}

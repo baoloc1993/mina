@@ -16,6 +16,11 @@ bucket_definitions:
       - select * from core_contacts where tenant_id = bucket.tenant_id
       - select * from core_files where tenant_id = bucket.tenant_id
       - select * from core_tags where tenant_id = bucket.tenant_id
+  app_vn_app_calendar:
+    parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.calendar' and enabled = true
+    data:
+      - select * from app_vn_app_calendar_event_overrides where tenant_id = bucket.tenant_id
+      - select * from app_vn_app_calendar_events where tenant_id = bucket.tenant_id
   app_hello:
     parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.hello' and enabled = true
     data:

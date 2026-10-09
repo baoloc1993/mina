@@ -4,6 +4,7 @@ import { addDays, mondayOf, WEEKDAY_SHORT, type Ymd } from '../recur/dates';
 import type { EventRow, OverrideRow } from '../recur/model';
 import { occurrencesAll, repeatSummary, type Env, type Occurrence } from '../recur/occurrences';
 import { dayHeading, lunarCell, lunarMonthLine, monthTitle, timeOf, weekDays } from './format';
+import { whenText } from './form';
 import { Banner, Empty, Seg, Skeleton } from './kit';
 
 export interface MainProps {
@@ -29,7 +30,7 @@ export function MainScreen(p: MainProps) {
   const monday = mondayOf(p.selected);
   const days = weekDays(monday);
   const sunday = days[6];
-  const occ = useMemo(() => occurrencesAll(p.events, p.overrides, monday, sunday, p.env), [p.events, p.overrides, monday, sunday, p.env.now > 0 ? Math.floor(p.env.now / 60_000) : 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  const occ = useMemo(() => occurrencesAll(p.events, p.overrides, monday, sunday, p.env), [p.events, p.overrides, monday, sunday, Math.floor(p.env.now / 60_000), new Date().getTimezoneOffset()]); // eslint-disable-line react-hooks/exhaustive-deps
   const dots = new Set(occ.map((o) => o.dateLocal));
   const step = p.view === 'day' ? 1 : 7;
   const shown = p.view === 'day' ? occ.filter((o) => o.dateLocal === p.selected) : occ;
@@ -82,7 +83,7 @@ export function MainScreen(p: MainProps) {
           ))}
           {days.map((d) => {
             const lc = lunarCell(d);
-            const cls = `cell${d === p.selected ? ' sel' : ''}${d === today ? ' today' : ''}`;
+            const cls = `cell${d === p.selected ? ' sel' : ''}${d === today ? ' today' : ''}${d.slice(0, 7) !== (p.view === 'day' ? p.selected : days[3]).slice(0, 7) ? ' out' : ''}`;
             return (
               <button key={d} role="gridcell" className={cls} aria-pressed={d === p.selected} aria-label={dayHeading(d)} onClick={() => p.setSelected(d)}>
                 <b>{Number(d.slice(8, 10))}</b>
@@ -144,7 +145,7 @@ export function Row({ o, env, readOnly, onOpen, onToggle }: { o: Occurrence; env
           <span className="subs">
             {o.recurring && <span className="tagchip mini">{repeatSummary(o.event)}</span>}
             {o.event.src_app === 'vn.app.note' && <span className="tagchip mini">Từ ghi chú</span>}
-            {o.snoozeUntilMs !== null && !o.done && <span className="snz">Hoãn đến {timeOf(env.zone.msToLocal(o.snoozeUntilMs))}</span>}
+            {o.snoozeUntilMs !== null && !o.done && <span className="snz">Hoãn đến {whenText(o.snoozeUntilMs, env)}</span>}
             {o.done && o.doneAtMs && <span className="muted">Đã xong</span>}
           </span>
         </span>

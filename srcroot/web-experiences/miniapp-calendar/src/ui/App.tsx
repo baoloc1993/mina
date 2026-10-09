@@ -80,7 +80,8 @@ export function App({ sdk }: { sdk: Sdk }) {
           setData(d);
         }
         setLoaded(true);
-        if (changed || opts.reconcile) await doReconcile(opts.force);
+        // đối chiếu thông báo chạy NỀN — lần đầu shell hỏi quyền thông báo (hộp thoại hệ thống) nên không được chặn nút Lưu
+        if (changed || opts.reconcile) void doReconcile(opts.force);
         return d;
       } catch {
         setLoaded(true);
@@ -223,7 +224,8 @@ export function App({ sdk }: { sdk: Sdk }) {
       if (!eventId) {
         const row = buildRow(form, newId(), null, e);
         await insertEvent(sdk, row);
-        await afterWrite([`${row.id}|${row.start_local.slice(0, 10)}`]);
+        // chỉ mục KHÔNG lặp mới "kêu ngay" khi giờ đã qua; mục lặp thì lần kế tiếp mới kêu (không giật mình vì thuốc 7 giờ sáng kêu lúc tối)
+        await afterWrite(row.repeat_unit ? undefined : [`${row.id}|${row.start_local.slice(0, 10)}`]);
       } else {
         const before = dataRef.current.events.find((x) => x.id === eventId) ?? (await getEvent(sdk, eventId));
         if (!before) {
@@ -235,13 +237,13 @@ export function App({ sdk }: { sdk: Sdk }) {
           if (occ) {
             const patch = thisOnlyPatch(form, occ, e);
             if (Object.keys(patch).length) await editThisOnly(sdk, eventId, occDate, patch);
-            await afterWrite([`${eventId}|${occDate}`]);
+            await afterWrite();
           }
         } else {
           const start = occDate && before.repeat_unit ? seriesStartDate(before, occDate, form) : form.date;
           const row = buildRow(form, eventId, before, e, start);
           await updateEvent(sdk, before, row);
-          await afterWrite([`${eventId}|${occDate ?? start}`]);
+          await afterWrite(row.repeat_unit ? undefined : [`${eventId}|${occDate ?? start}`]);
         }
       }
       setRoute({ name: 'main' });
@@ -379,7 +381,7 @@ export function App({ sdk }: { sdk: Sdk }) {
       {addSheet && (
         <Sheet title="Thêm gì?" onClose={() => setAddSheet(false)}>
           <button
-            className="btn"
+            className="btn sec"
             onClick={() => {
               setAddSheet(false);
               setRoute({ name: 'edit', eventId: null, occDate: null, kind: 'event', date: selected });
@@ -388,7 +390,7 @@ export function App({ sdk }: { sdk: Sdk }) {
             Sự kiện
           </button>
           <button
-            className="btn"
+            className="btn sec"
             onClick={() => {
               setAddSheet(false);
               setRoute({ name: 'edit', eventId: null, occDate: null, kind: 'reminder', date: selected });

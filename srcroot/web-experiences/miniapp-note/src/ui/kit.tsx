@@ -168,3 +168,25 @@ export function formatWhen(iso: string, now = new Date()): string {
   if (diff < 7) return ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][d.getDay()];
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 }
+
+/** Ô chọn ngày hiển thị dd/mm/yyyy theo kiểu Việt Nam bất kể locale máy (ô date gốc nằm phủ trong suốt để vẫn mở bộ chọn của hệ thống). */
+export function DateField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const ok = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return (
+    <label className="pickfield">
+      <span>{ok ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : 'Chọn ngày'}</span>
+      <input className="pf-native" type="date" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+/** Ô chọn giờ hiển thị HH:mm (24 giờ) bất kể locale máy. */
+export function TimeField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const ok = /^\d{2}:\d{2}$/.test(value);
+  return (
+    <label className="pickfield">
+      <span>{ok ? value : 'Chọn giờ'}</span>
+      <input className="pf-native" type="time" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}

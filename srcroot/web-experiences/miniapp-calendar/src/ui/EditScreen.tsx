@@ -1,10 +1,11 @@
 // S16 — Soạn sự kiện / lời nhắc (C27 chọn ngày–giờ, C28 chọn lặp trong sheet C24).
 import { useState } from 'react';
-import { ALERT_CHOICES, ALERT_LABEL, type EventRow, type Kind, type RepeatUnit } from '../recur/model';
+import { ALERT_CHOICES, type EventRow, type Kind, type RepeatUnit } from '../recur/model';
 import { repeatSummary, type Env, type Occurrence } from '../recur/occurrences';
-import { buildRow, defaultForm, formFromEvent, isPast, quickPicks, validate, type Form } from './form';
+import { solarToLunar } from '../lunar/lunar';
+import { buildRow, defaultForm, formFromEvent, isPast, nextLunarDate, quickPicks, validate, type Form } from './form';
 import { summaryLine } from './format';
-import { Banner, Dialog, Seg, Sheet, Switch } from './kit';
+import { Banner, DateField, Dialog, Seg, Sheet, Switch, TimeField } from './kit';
 
 interface Props {
   env: Env;
@@ -46,7 +47,9 @@ export function EditScreen(p: Props) {
 
   const submit = () => {
     setShowErr(true);
-    if (Object.keys(errs).length || ro || p.busy) return;
+    if (ro || p.busy) return;
+    if (errs.every || errs.until) return setRepeatOpen(true); // lỗi nằm trong sheet Lặp — mở lại cho người dùng thấy
+    if (Object.keys(errs).length) return;
     if (p.event?.repeat_unit && p.occ && !repeatChanged) setScopeAsk(true);
     else p.onSave(f, 'all');
   };
@@ -54,6 +57,8 @@ export function EditScreen(p: Props) {
   const row = buildRow(f, 'x', null, p.env);
   const summary = repeatSummary(row);
   const picks = quickPicks(p.env);
+  const repeatErr = showErr ? errs.every ?? errs.until : undefined;
+  const occLabel = p.occ ? `${p.occ.occDate.slice(8, 10)}/${p.occ.occDate.slice(5, 7)}` : '';
 
   return (
     <div className="screen">
@@ -88,16 +93,16 @@ export function EditScreen(p: Props) {
         <div className="fld">
           <span className="lbl">{f.kind === 'event' ? 'Bắt đầu' : 'Nhắc lúc'}</span>
           <div className="two">
-            <input className={`input${showErr && errs.date ? ' err' : ''}`} type="date" aria-label="Ngày" value={f.date} onChange={(e) => set({ date: e.target.value })} />
-            {!f.allDay && <input className={`input${showErr && errs.time ? ' err' : ''}`} type="time" aria-label="Giờ" value={f.time} onChange={(e) => set({ time: e.target.value })} />}
+            <DateField label="Ngày" value={f.date} error={showErr && !!errs.date} onChange={(v) => set({ date: v })} />
+            {!f.allDay && <TimeField label="Giờ" value={f.time} error={showErr && !!errs.time} onChange={(v) => set({ time: v })} />}
           </div>
           {!f.allDay && f.kind === 'event' && (
             <>
-              <span className="lbl" style={{ marginTop: 'var(--space-sm)' }}>Kết thúc</span>
-              <input className={`input${showErr && errs.end ? ' err' : ''}`} type="time" aria-label="Giờ kết thúc" value={f.endTime} onChange={(e) => set({ endTime: e.target.value })} />
+              <span className="lbl" style={{ marginTop: 'var(--space-sm)' }}>Kết thúc (cùng ngày)</span>
+              <TimeField label="Giờ kết thúc" value={f.endTime} error={!!errs.end} onChange={(v) => set({ endTime: v })} />
             </>
           )}
-          {showErr && errs.end && <div className="errtxt" role="alert">{errs.end}</div>}
+          {errs.end && <div className="errtxt" role="alert">{errs.end}</div>}
           {past && <div className="warntxt">Giờ này đã qua — sẽ nhắc ngay.</div>}
           {errs.date === undefined && <div className="muted" style={{ marginTop: 'var(--space-xs)' }}>{summaryLine(f.date, f.allDay ? null : f.time)}</div>}
           {!f.allDay && !editing && (
@@ -110,14 +115,16 @@ export function EditScreen(p: Props) {
             </div>
           )}
         </div>
-        <button className="lnk" onClick={() => setRepeatOpen(true)}>
-          <span>Lặp</span>
-          <span className="val">{summary}</span>
-        </button>
+        <div className="fld">
+          <button className="lnk" onClick={() => setRepeatOpen(true)}>
+            <span>Lặp</span>
+            <span className="val">{summary}</span>
+          </button>
+          {repeatErr && <div className="errtxt" role="alert">{repeatErr}</div>}
+        </div>
         <div className="fld">
           <span className="lbl">Nhắc trước</span>
-          <Seg wide value={String(f.alert)} options={ALERT_CHOICES.map((a) => ({ v: String(a), label: a === 0 ? 'Đúng giờ' : a === 10 ? '10 phút' : a === 60 ? '1 giờ' : '1 ngày' }))} onChange={(v) => set({ alert: Number(v) })} />
-          <span className="muted" style={{ marginTop: 'var(--space-xs)' }}>{ALERT_LABEL[f.alert]}</span>
+          <Seg wide small value={String(f.alert)} options={ALERT_CHOICES.map((a) => ({ v: String(a), label: a === 0 ? 'Đúng giờ' : a === 10 ? '10 phút' : a === 60 ? '1 giờ' : '1 ngày' }))} onChange={(v) => set({ alert: Number(v) })} />
         </div>
         {!f.allDay && !(f.unit && f.cal === 'lunar' && f.unit !== 'day' && f.unit !== 'week') && (
           <Switch on={f.fixed} label="Giữ đúng thời điểm khi đổi múi giờ" hint="Dùng cho họp online. Mặc định, 7 giờ là 7 giờ nơi bạn đang ở." onChange={(v) => set({ fixed: v })} />
@@ -128,15 +135,15 @@ export function EditScreen(p: Props) {
           </button>
         )}
       </div>
-      {repeatOpen && <RepeatSheet f={f} errs={showErr ? errs : {}} set={set} onClose={() => setRepeatOpen(false)} summary={summary} />}
+      {repeatOpen && <RepeatSheet f={f} errs={errs} set={set} onClose={() => setRepeatOpen(false)} summary={summary} env={p.env} />}
       {scopeAsk && (
         <Dialog
           title="Sửa mục lặp"
-          text={`“${p.event?.title ?? ''}” lặp lại nhiều lần. Áp dụng cho lần nào?`}
+          text={`“${p.event?.title ?? ''}” lặp lại nhiều lần. Áp dụng cho lần nào${occLabel ? ` (đang sửa lần ngày ${occLabel})` : ''}?`}
           onClose={() => setScopeAsk(false)}
           buttons={[
-            { label: 'Chỉ lần này', run: () => p.onSave(f, 'this') },
-            { label: 'Tất cả các lần', run: () => p.onSave(f, 'all') },
+            { label: occLabel ? `Chỉ lần ${occLabel}` : 'Chỉ lần này', run: () => p.onSave(f, 'this') },
+            { label: 'Tất cả các lần', run: () => p.onSave(f, 'all'), secondary: true },
             { label: 'Huỷ', run: () => undefined, secondary: true },
           ]}
         />
@@ -145,8 +152,16 @@ export function EditScreen(p: Props) {
   );
 }
 
-function RepeatSheet({ f, errs, set, onClose, summary }: { f: Form; errs: { every?: string; until?: string }; set: (p: Partial<Form>) => void; onClose: () => void; summary: string }) {
+function RepeatSheet({ f, errs, set, onClose, summary, env }: { f: Form; errs: { every?: string; until?: string }; set: (p: Partial<Form>) => void; onClose: () => void; summary: string; env: Env }) {
   const canLunar = f.unit === 'month' || f.unit === 'year';
+  const today = env.zone.msToLocal(env.now).slice(0, 10);
+  const lunar = f.cal === 'lunar' && canLunar;
+  const anchor = /^\d{4}-\d{2}-\d{2}$/.test(f.date) && Number(f.date.slice(0, 4)) >= 1901 && Number(f.date.slice(0, 4)) <= 2099 ? solarToLunar(Number(f.date.slice(0, 4)), Number(f.date.slice(5, 7)), Number(f.date.slice(8, 10))) : null;
+  const setLunar = (day: number, month: number | null) => {
+    if (!Number.isInteger(day) || day < 1 || day > 30) return;
+    const d = nextLunarDate(day, month, today);
+    if (d) set({ date: d });
+  };
   return (
     <Sheet title="Lặp" onClose={onClose}>
       <div className="col">
@@ -168,22 +183,29 @@ function RepeatSheet({ f, errs, set, onClose, summary }: { f: Form; errs: { ever
             <div className="fld">
               <span className="lbl">Theo lịch</span>
               <Seg wide value={f.cal} options={[{ v: 'solar', label: 'Dương lịch' }, { v: 'lunar', label: 'Âm lịch' }]} onChange={(c) => set({ cal: c, ...(c === 'lunar' ? { allDay: true, fixed: false } : {}) })} />
-              {f.cal === 'lunar' && (
-                <span className="muted" style={{ marginTop: 'var(--space-xs)' }}>
-                  Lặp âm lịch là mục cả ngày, nhắc lúc 07:00. Năm có tháng nhuận chỉ nhắc ở tháng thường.
-                </span>
-              )}
+            </div>
+          )}
+          {lunar && anchor && (
+            <div className="fld">
+              <span className="lbl">{f.unit === 'year' ? 'Ngày âm lịch (vd giỗ 12 tháng 3)' : 'Ngày âm lịch mỗi tháng (vd rằm = 15)'}</span>
+              <div className="two">
+                <input className="input" type="number" inputMode="numeric" min={1} max={30} aria-label="Ngày âm" value={anchor.day} onChange={(e) => setLunar(Number(e.target.value), f.unit === 'year' ? anchor.month : null)} />
+                {f.unit === 'year' && <input className="input" type="number" inputMode="numeric" min={1} max={12} aria-label="Tháng âm" value={anchor.month} onChange={(e) => { const m = Number(e.target.value); if (Number.isInteger(m) && m >= 1 && m <= 12) setLunar(anchor.day, m); }} />}
+              </div>
+              <span className="muted" style={{ marginTop: 'var(--space-xs)' }}>
+                Lặp âm lịch là mục cả ngày, nhắc lúc 07:00. Lần đầu: {f.date.slice(8, 10)}/{f.date.slice(5, 7)}/{f.date.slice(0, 4)}. Năm có tháng nhuận chỉ nhắc ở tháng thường; ngày 30 gặp tháng thiếu thì nhắc ngày 29.
+              </span>
             </div>
           )}
           <div className="fld">
-            <label className="lbl" htmlFor="every">Mỗi</label>
+            <label className="lbl" htmlFor="every">Mỗi (số {f.unit === 'day' ? 'ngày' : f.unit === 'week' ? 'tuần' : f.unit === 'month' ? 'tháng' : 'năm'})</label>
             <input id="every" className={`input${errs.every ? ' err' : ''}`} type="number" inputMode="numeric" min={1} max={365} value={Number.isFinite(f.every) ? f.every : ''} onChange={(e) => set({ every: e.target.value === '' ? NaN : Math.trunc(Number(e.target.value)) })} />
             {errs.every && <div className="errtxt" role="alert">{errs.every}</div>}
           </div>
           <div className="fld">
-            <label className="lbl" htmlFor="until">Đến ngày (không bắt buộc)</label>
+            <span className="lbl">Đến ngày (không bắt buộc)</span>
             <div className="row">
-              <input id="until" className={`input${errs.until ? ' err' : ''}`} type="date" value={f.until} onChange={(e) => set({ until: e.target.value })} />
+              <DateField label="Đến ngày" value={f.until} error={!!errs.until} onChange={(v) => set({ until: v })} />
               {f.until && (
                 <button className="btn sec slim" onClick={() => set({ until: '' })}>
                   Bỏ
@@ -195,9 +217,11 @@ function RepeatSheet({ f, errs, set, onClose, summary }: { f: Form; errs: { ever
         </>
       )}
       <div className="muted">{summary}</div>
-      <button className="btn" onClick={onClose}>
-        Xong
-      </button>
+      <div className="stick">
+        <button className="btn" disabled={!!(errs.every || errs.until)} onClick={onClose}>
+          Xong
+        </button>
+      </div>
     </Sheet>
   );
 }

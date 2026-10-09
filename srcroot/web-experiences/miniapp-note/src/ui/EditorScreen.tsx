@@ -230,7 +230,6 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
     setRemSheet(false);
     setCalBanner('');
     await refreshMeta();
-    p.toast({ msg: 'Đã gửi tới Lịch' });
     return '';
   };
   const onOpenCal = (id: string) =>
@@ -305,7 +304,7 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
           <div className="remrow" key={r.id}>
             <span>Lời nhắc: {formatShort(r.at_local)}</span>
             <button className="link" onClick={() => void onOpenCal(r.id)}>Mở trong Lịch</button>
-            {!viewOnly && <button className="rm" aria-label="Bỏ dòng lời nhắc" onClick={() => void onForget(r.id)}>×</button>}
+            {!viewOnly && <button className="link hide" aria-label="Ẩn dòng này (lời nhắc vẫn còn trong Lịch)" onClick={() => void onForget(r.id)}>Ẩn</button>}
           </div>
         ))}
         <input

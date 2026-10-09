@@ -3,7 +3,7 @@ import { addDays, diffDays, isYmd, joinLocal, splitLocal, weekday, type Ymd } fr
 import type { EditPatch, EventRow, Kind, RepeatUnit } from '../recur/model';
 import { eventZone, type Env, type Occurrence } from '../recur/occurrences';
 import { deviceTimeZoneName } from '../recur/zone';
-import { solarToLunar } from '../lunar/lunar';
+import { lunarMonthLength, lunarToSolar, nextLunarMonth, solarToLunar } from '../lunar/lunar';
 
 export interface Form {
   kind: Kind;
@@ -87,6 +87,7 @@ export function validate(f: Form): FormErrors {
 
 /** Giờ đã qua (so với `env.now` theo múi giờ máy) — chỉ cảnh báo "sẽ nhắc ngay", vẫn cho lưu. */
 export function isPast(f: Form, env: Env): boolean {
+  if (f.unit) return false; // mục lặp: lần đã qua hôm nay không kêu lại — lần đầu tiên là lần kế tiếp
   if (f.allDay || !isYmd(f.date) || !/^\d{2}:\d{2}$/.test(f.time)) return false;
   return env.zone.localToMs(joinLocal(f.date, f.time)) < env.now;
 }
@@ -187,4 +188,45 @@ export function snoozeOptions(env: Env): { label: string; until: string }[] {
     { label: '1 giờ', until: env.zone.msToLocal(env.now + 3_600_000) },
     { label: 'Sáng mai', until: joinLocal(addDays(now.slice(0, 10), 1), '07:00') },
   ];
+}
+
+const fmt = (y: number, m: number, d: number) => `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+/**
+ * Ngày dương gần nhất (≥ `from`) có ngày âm `day` (và tháng âm `month` nếu có; `null` = bất kỳ tháng — dùng cho lặp tháng).
+ * Dùng khi người dùng nhập thẳng "ngày 12 tháng 3 âm" thay vì tự đổi sang ngày dương. Ngày 30 gặp tháng 29 ngày → ngày 29.
+ */
+export function nextLunarDate(day: number, month: number | null, from: Ymd): Ymd | null {
+  const fy = Number(from.slice(0, 4));
+  const fl = solarToLunar(fy, Number(from.slice(5, 7)), Number(from.slice(8, 10)));
+  if (month !== null) {
+    for (let y = fl.year; y <= fl.year + 2; y++) {
+      const len = lunarMonthLength(month, y);
+      if (len === null) continue;
+      const s = lunarToSolar(Math.min(day, len), month, y);
+      if (s && fmt(s.y, s.m, s.d) >= from) return fmt(s.y, s.m, s.d);
+    }
+    return null;
+  }
+  let cur = { month: fl.month, year: fl.year, leap: fl.leap };
+  for (let i = 0; i < 16; i++) {
+    const len = lunarMonthLength(cur.month, cur.year, cur.leap);
+    if (len !== null) {
+      const s = lunarToSolar(Math.min(day, len), cur.month, cur.year, cur.leap);
+      if (s && fmt(s.y, s.m, s.d) >= from) return fmt(s.y, s.m, s.d);
+    }
+    cur = nextLunarMonth(cur.month, cur.year, cur.leap);
+  }
+  return null;
+}
+
+/** Nhãn thời điểm hoãn: "hôm nay 21:07" · "ngày mai 07:00" · "11/10 07:00". */
+export function whenText(ms: number, env: Env): string {
+  const l = env.zone.msToLocal(ms);
+  const d = l.slice(0, 10);
+  const today = env.zone.msToLocal(env.now).slice(0, 10);
+  const hm = l.slice(11);
+  if (d === today) return `hôm nay ${hm}`;
+  if (d === addDays(today, 1)) return `ngày mai ${hm}`;
+  return `${d.slice(8, 10)}/${d.slice(5, 7)} ${hm}`;
 }

@@ -2,6 +2,30 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { errCode } from '../sdk';
 
+const p2 = (n: number) => String(n).padStart(2, '0');
+/** Ô chọn ngày hiển thị dd/mm/yyyy theo kiểu Việt Nam bất kể locale máy (ô date gốc nằm phủ trong suốt để vẫn mở bộ chọn của hệ thống). */
+export function DateField({ value, onChange, label, error, disabled }: { value: string; onChange: (v: string) => void; label: string; error?: boolean; disabled?: boolean }) {
+  const ok = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return (
+    <label className={`pickfield${error ? ' err' : ''}${disabled ? ' off' : ''}`}>
+      <span>{ok ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : 'Chọn ngày'}</span>
+      <input className="pf-native" type="date" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+/** Ô chọn giờ hiển thị HH:mm (24 giờ) bất kể locale máy. */
+export function TimeField({ value, onChange, label, error, disabled }: { value: string; onChange: (v: string) => void; label: string; error?: boolean; disabled?: boolean }) {
+  const ok = /^\d{2}:\d{2}$/.test(value);
+  return (
+    <label className={`pickfield${error ? ' err' : ''}${disabled ? ' off' : ''}`}>
+      <span>{ok ? value : 'Chọn giờ'}</span>
+      <input className="pf-native" type="time" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+void p2;
+
 export function Banner({ tone = 'info', children, action }: { tone?: 'info' | 'warn' | 'err'; children: ReactNode; action?: { label: string; run: () => void } }) {
   return (
     <div className={`banner ${tone}`} role={tone === 'info' ? 'status' : 'alert'}>
@@ -128,9 +152,9 @@ export function Switch({ on, label, hint, disabled, onChange }: { on: boolean; l
   );
 }
 
-export function Seg<T extends string>({ value, options, onChange, wide, disabled }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; wide?: boolean; disabled?: boolean }) {
+export function Seg<T extends string>({ value, options, onChange, wide, small, disabled }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; wide?: boolean; small?: boolean; disabled?: boolean }) {
   return (
-    <div className={`seg${wide ? ' wide' : ''}`} role="group">
+    <div className={`seg${wide ? ' wide' : ''}${small ? ' small' : ''}`} role="group">
       {options.map((o) => (
         <button key={o.v} className={o.v === value ? 'on' : ''} aria-pressed={o.v === value} disabled={disabled} onClick={() => onChange(o.v)}>
           {o.label}

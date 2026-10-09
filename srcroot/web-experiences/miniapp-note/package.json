@@ -1,6 +1,6 @@
 {
   "name": "@platform/miniapp-note",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Mini app Ghi chú (vn.app.note) — vòng 4–5: soạn rich text + checklist, CRDT Yjs, tìm không dấu, thùng rác, intent note.* + đặt nhắc sang Lịch",
   "type": "module",
