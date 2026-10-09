@@ -19,6 +19,7 @@ COMPOSE := docker compose --env-file deployment/local/.env -f deployment/local/d
 # Nhẹ RAM: bỏ các service Supabase chưa cần (giữ db, auth, rest, kong, edge-runtime, mailpit, storage-api cho bucket `packages`).
 SB_EXCLUDE := studio,realtime,imgproxy,vector,logflare,postgres-meta,pgadmin-schema-diff,migra,supavisor
 SUPABASE := cd $(BACKEND) && npx --yes supabase@latest
+NOTE_DIR := srcroot/web-experiences/miniapp-note
 NPM_BE := cd $(BACKEND) && npm --silent
 
 -include deployment/local/.env
@@ -59,8 +60,9 @@ check:
 	cd $(SHELL_DIR) && npm --silent run build:tokens && npm --silent run build:fixtures
 	cd $(SHELL_DIR) && npx tsc --noEmit && npx tsc --noEmit -p packages/miniapp-sdk
 	$(NPM_BE) run typecheck
+	cd $(NOTE_DIR) && npm --silent run typecheck && npm --silent run build
 	$(NPM_BE) exec -- deno check --no-lock supabase/functions/upload/index.ts supabase/functions/catalog/index.ts supabase/functions/issue-app-token/index.ts
-	@echo "OK: typecheck shell + SDK/mock + CLI registry + Edge Functions sạch, fixtures đóng được"
+	@echo "OK: typecheck shell + SDK/mock + Ghi chú (build dist/) + CLI registry + Edge Functions sạch, fixtures đóng được"
 
 test:
 	$(SUPABASE) test db
@@ -68,6 +70,7 @@ test:
 	$(NPM_BE) run test:cli
 	cd $(SHELL_DIR) && npx jest
 	cd $(SHELL_DIR) && npm --silent run test:sdk
+	cd $(NOTE_DIR) && npm --silent test
 
 FIXTURE ?= fixtures/miniapp-hello
 mock:
@@ -78,6 +81,7 @@ seed:
 
 accept:
 	$(NPM_BE) run accept
+	$(NPM_BE) run accept:notes
 
 migrate:
 	$(SUPABASE) migration up --local
