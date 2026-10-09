@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { runtime, useRuntime } from '../runtime';
+import { hostGroups, hostSubtitle } from '../runtime/netGrants';
 import { AppIcon, iconUriOf } from '../ui/AppIcon';
 import { Banner } from '../ui/Banner';
 import { Button } from '../ui/Button';
@@ -22,7 +23,7 @@ import { color } from '../ui/theme';
 import { useBusy } from '../ui/useBusy';
 import type { Nav } from './nav';
 
-type Dlg = 'uninstall' | 'purge' | null;
+type Dlg = 'uninstall' | 'purge' | { revoke: string } | null;
 
 export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
   const rt = useRuntime();
@@ -54,6 +55,9 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
   const manifest = la?.manifest ?? null;
   const scopes = scopeLines(manifest?.scopes ?? item?.scopes, manifest?.network ?? item?.network);
   const description = manifest?.description ?? item?.description ?? null;
+  // Vòng 6: ba nhóm host app được truy cập — theo app · theo cấu hình (server) · bạn cho phép (có Thu hồi).
+  const hosts = hostGroups(manifest?.network ?? item?.network, item?.config, rt.netGrants, appId);
+  const hostCount = hosts.manifest.length + hosts.config.length + hosts.user.length;
   const privateApp = !!item?.owner_tenant_id || !!la?.private_to_tenant;
   const running = la?.current_version ?? null;
   const offerVersion = item?.version ?? null;
@@ -89,6 +93,17 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
         await runtime.uninstall(appId);
         setDlg(null);
         runtime.pushToast({ kind: 'info', text: `Đã gỡ ${name}` });
+      } catch (e) {
+        setDlgErr(errorFrom(e));
+      }
+    });
+  const revokeHost = typeof dlg === 'object' && dlg ? dlg.revoke : null;
+  const confirmRevoke = () =>
+    runDlg(async () => {
+      setDlgErr(null);
+      try {
+        if (revokeHost) await runtime.revokeNetGrant(appId, revokeHost);
+        setDlg(null);
       } catch (e) {
         setDlgErr(errorFrom(e));
       }
@@ -208,12 +223,43 @@ export function AppDetailScreen({ appId, nav }: { appId: string; nav: Nav }) {
             </ListGroup>
           </>
         ) : null}
+        {hostCount > 0 ? (
+          <>
+            <SectionTitle>Trang app được phép truy cập</SectionTitle>
+            <ListGroup>
+              {hosts.manifest.map((h) => (
+                <ListRow key={`m-${h}`} title={h} subtitle={hostSubtitle('manifest')} />
+              ))}
+              {hosts.config.map((h) => (
+                <ListRow key={`c-${h}`} title={h} subtitle={hostSubtitle('config')} />
+              ))}
+              {hosts.user.map((g) => (
+                <ListRow key={`u-${g.host}`} title={g.host} subtitle={hostSubtitle('user', g.since)} testID={`grant-${g.host}`}>
+                  <Button title="Thu hồi" variant="dangerOutline" onPress={() => setDlg({ revoke: g.host })} testID={`revoke-${g.host}`} />
+                </ListRow>
+              ))}
+            </ListGroup>
+          </>
+        ) : null}
         {description ? (
           <Txt size="sm" tone="muted">
             {description}
           </Txt>
         ) : null}
       </Body>
+
+      <ConfirmDialog
+        visible={revokeHost !== null}
+        title={`Thu hồi quyền truy cập ${revokeHost ?? ''}?`}
+        message={`${name} sẽ không tải được dữ liệu từ trang này nữa (NET_BLOCKED) trên mọi máy của bạn. Bạn có thể cho phép lại sau.`}
+        error={dlgErr}
+        confirmLabel="Thu hồi"
+        busyLabel="Đang thu hồi…"
+        danger
+        busy={dlgBusy}
+        onCancel={closeDlg}
+        onConfirm={() => void confirmRevoke()}
+      />
 
       <ConfirmDialog
         visible={dlg === 'uninstall'}

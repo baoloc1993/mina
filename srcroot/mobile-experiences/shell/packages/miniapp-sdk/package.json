@@ -1,6 +1,6 @@
 {
   "name": "@platform/miniapp-sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "SDK v0 cho mini app: window.miniapp (tiêm vào WebView), design tokens, kiểu TypeScript và mock chạy trên trình duyệt.",
   "private": true,
   "types": "./src/index.d.ts",

@@ -4,8 +4,17 @@
 import type { EntitlementState } from '../entitlement/entitlement';
 import type { AppRow, CatalogApp, InstallStep } from '../packages/types';
 import type { SyncStatus } from '../bridge/types';
+import type { NetGrantItem } from './netGrants';
 
-export type { AppRow, CatalogApp, InstallStep, SyncStatus, EntitlementState };
+export type { AppRow, CatalogApp, InstallStep, SyncStatus, EntitlementState, NetGrantItem };
+
+/** Hộp thoại hệ thống "Cho phép <app> truy cập <host>?" (C9) do `net.requestAccess` bật. */
+export interface AccessPrompt {
+  appId: string;
+  appName: string;
+  host: string;
+  reason: string | null;
+}
 
 export interface SessionInfo {
   email: string | null;
@@ -105,6 +114,10 @@ export interface RuntimeState {
   pendingChanges: number;
   /** Số file chưa upload. */
   pendingFiles: number;
+  /** Hộp thoại xin quyền host đang mở (null ⇒ không). */
+  accessPrompt: AccessPrompt | null;
+  /** Domain do người dùng cho phép còn sống (mọi app) — S4 lọc theo app. */
+  netGrants: NetGrantItem[];
 }
 
 export type SignOutResult = { done: true } | { done: false; pending: number };
@@ -146,6 +159,12 @@ export interface Runtime {
   renameThisDevice(name: string): Promise<void>;
   /** `true` = đã liên kết; `false` = người dùng đóng trình duyệt giữa chừng (UI không báo thành công). Lỗi ⇒ ném (PROVIDER_UNAVAILABLE…). */
   linkProvider(provider: 'google' | 'apple'): Promise<boolean>;
+
+  // ----- domain do người dùng cho phép (vòng 6) -----
+  /** Người dùng trả lời hộp thoại xin quyền host (Cho phép / Không). */
+  answerAccessPrompt(allow: boolean): void;
+  /** Thu hồi: xoá mềm mọi dòng sống `(appId, host)`; lần `fetch` sau của app → NET_BLOCKED. */
+  revokeNetGrant(appId: string, host: string): Promise<void>;
 
   // ----- toast -----
   pushToast(t: Omit<ToastItem, 'id'>): void;

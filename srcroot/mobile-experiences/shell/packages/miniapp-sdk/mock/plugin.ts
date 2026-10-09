@@ -14,6 +14,8 @@ export interface MockPluginOptions {
   fixturesRoot: string;
   /** Thư mục fixture mở mặc định (đối số của `npm run mock`); có thể nằm ngoài fixturesRoot. */
   defaultDir: string | null;
+  /** Thư mục chứa `<app_id>.json` = cấu hình app giả lập (catalog.apps[].config). */
+  configDir?: string | null;
 }
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -120,6 +122,14 @@ export function mockPlugin(o: MockPluginOptions): Plugin {
             const dir = listFixtureDirs(o).get(name);
             if (!dir) return json(res, 404, { error: `không có fixture ${name}` });
             return json(res, 200, loadFixture(dir));
+          }
+          if (url.pathname.startsWith('/__mock/config/')) {
+            // Cấu hình app giả lập `catalog.apps[].config`: <configDir>/<app_id>.json; không có → {}
+            const id = decodeURIComponent(url.pathname.slice('/__mock/config/'.length));
+            if (!/^[a-z0-9]+(\.[a-z0-9-]+)+$/.test(id)) return json(res, 400, { error: 'app_id sai khuôn' });
+            const f = o.configDir ? join(o.configDir, `${id}.json`) : '';
+            if (f && existsSync(f)) return json(res, 200, JSON.parse(readFileSync(f, 'utf8')));
+            return json(res, 200, {});
           }
           if (url.pathname === '/__mock/fetch' && req.method === 'POST') {
             const r = JSON.parse(await readBody(req));

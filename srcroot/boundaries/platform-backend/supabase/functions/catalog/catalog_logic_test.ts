@@ -54,3 +54,13 @@ Deno.test("description / scopes / network lấy từ manifest; thiếu → null 
   const none = toCatalogApp(row({ version: null, package_path: null }), null, null, m);
   assertEquals([none.description, none.scopes, none.network, none.code], [null, [], [], "NO_SAFE_VERSION"]);
 });
+
+Deno.test("config (vòng 6): trả khi app có cấu hình (kể cả NO_SAFE_VERSION); vắng khi null / không phải object", () => {
+  const cfg = { network: ["vnexpress.net"], sources: [{ key: "vne" }] };
+  assertEquals(toCatalogApp(row(), "http://x", null, null, cfg).config, cfg);
+  assertEquals(toCatalogApp(row({ version: null, package_path: null }), null, null, null, cfg).config, cfg);
+  assertEquals("config" in toCatalogApp(row(), "http://x"), false);
+  assertEquals("config" in toCatalogApp(row(), "http://x", null, null, null), false);
+  assertEquals("config" in toCatalogApp(row(), "http://x", null, null, [1]), false);
+  assertEquals("config" in toCatalogApp(row(), "http://x", null, null, "x"), false);
+});

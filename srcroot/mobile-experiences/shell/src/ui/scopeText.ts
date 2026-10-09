@@ -6,7 +6,8 @@ const FIXED: Record<string, string> = {
   'intent.send': 'Gửi yêu cầu tới app khác',
   'notify.local': 'Thông báo',
   'storage.files': 'Lưu ảnh và tệp của app',
-  'ui.native': 'Chọn ảnh và chia sẻ',
+  'net.user-approved': 'Hỏi bạn trước khi truy cập trang mới',
+  'ui.native': 'Chọn ảnh, chia sẻ và mở trang web',
   'auth.token': 'Nhận quyền truy cập riêng cho app',
 };
 

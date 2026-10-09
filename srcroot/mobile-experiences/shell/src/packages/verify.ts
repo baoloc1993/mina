@@ -153,6 +153,7 @@ export function parseManifest(text: string, files: Record<string, Uint8Array>, e
     bad('network phải là mảng host đúng, không wildcard');
   }
   if ((network as string[]).length && !(scopes as string[]).includes('net')) bad('có "network" nhưng thiếu scope "net"');
+  if ((scopes as string[]).includes('net.user-approved') && !(scopes as string[]).includes('net')) bad('scope "net.user-approved" đòi kèm scope "net"');
   let intents: Manifest['intents'] = { sends: [], receives: [] };
   if (m.intents !== undefined) {
     const i = m.intents as { sends?: unknown; receives?: unknown };

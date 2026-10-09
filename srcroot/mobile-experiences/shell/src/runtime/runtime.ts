@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FS from 'expo-file-system/legacy';
+import * as WebBrowser from 'expo-web-browser';
 import * as semver from 'semver';
 import type { PowerSyncDatabase } from '@powersync/react-native';
 import { config } from '../config';
@@ -34,6 +35,7 @@ import { PowerSyncAppRepo, kvGet, kvSet } from '../store/repo';
 import { Connector, type ConnectorHooks } from '../store/connector';
 import { disconnectAndClear, openDatabase, rebuildSchema } from '../store/db';
 import { receiversOf } from './intents';
+import { configOf, extraHostsOf, liveGrants, type GrantRow } from './netGrants';
 import { LiveSet, SUSPEND_ACK_MS } from './liveSet';
 import { NotifyReconciler } from './notifyReconcile';
 import type {
@@ -60,7 +62,7 @@ function initialState(): RuntimeState {
     entitlement: { readOnly: false, graceLeftMs: null, expired: false, reason: 'no-cache' }, plan: null, apps: [],
     catalog: { items: [], fromCache: false, loading: false, error: null, fetchedAt: null },
     installing: {}, live: [], foreground: null, opening: null, blockedOpen: null, toasts: [], rejections: [], unseenRejections: 0,
-    pendingChanges: 0, pendingFiles: 0,
+    pendingChanges: 0, pendingFiles: 0, accessPrompt: null, netGrants: [],
   };
 }
 
@@ -104,6 +106,12 @@ export class RuntimeImpl implements Runtime {
   private probing = false;
   /** `lastSyncedAt` thấy lúc bắt đầu phiên (có thể cũ) — chỉ giá trị KHÁC nó mới tính là lần đồng bộ đầu của phiên. */
   private syncBaseline: string | null = null;
+  /** Hộp thoại xin quyền host: hàng đợi tuần tự (mỗi lúc một hộp) + hàm trả lời của hộp đang mở. */
+  private accessQueue: Promise<unknown> = Promise.resolve();
+  private accessResolver: ((allow: boolean) => void) | null = null;
+  private lastGrantProbe = 0;
+  /** Cấu hình app lúc app `ready` / lần phát `config` gần nhất — để biết khi nào cần báo app đang sống. */
+  private configSeen = new Map<string, string>();
 
   // ---------- trạng thái ----------
   getState = (): RuntimeState => this.s;
@@ -184,6 +192,7 @@ export class RuntimeImpl implements Runtime {
       const { data } = await supabase.auth.getSession();
       console.log('[rt] init: apps');
       await this.refreshApps();
+      await this.refreshGrants();
       this.set({ catalog: { ...this.s.catalog, fetchedAt }, entitlement: this.ent.state });
       this.recomputeCatalog(true);
       if (data.session) await this.startSession(data.session.access_token);
@@ -312,11 +321,12 @@ export class RuntimeImpl implements Runtime {
     this.pendingReorder = null;
     this.catalogResp = null;
     this.installationsMap.clear();
+    this.configSeen.clear();
     this.infos.clear();
     this.reconciler.reset();
     this.live = new LiveSet();
     await rebuildSchema(this.db);
-    this.set({ apps: [], live: [], foreground: null, rejections: [], unseenRejections: 0, installing: {}, plan: null });
+    this.set({ apps: [], live: [], foreground: null, rejections: [], unseenRejections: 0, installing: {}, plan: null, accessPrompt: null, netGrants: [] });
     this.recomputeCatalog(false);
   }
 
@@ -342,6 +352,7 @@ export class RuntimeImpl implements Runtime {
         const resp = await api.fetchCatalog();
         this.lastCatalogAt = Date.now();
         this.catalogResp = resp;
+        this.emitConfigChanges();
         const now = new Date().toISOString();
         await kvSet(this.db, 'catalog', JSON.stringify(resp));
         await kvSet(this.db, 'catalog_at', now);
@@ -453,6 +464,10 @@ export class RuntimeImpl implements Runtime {
         onProgress?.(done);
       }
     }
+    // Xoá hẳn dữ liệu của app cũng thu hồi domain người dùng đã cho phép cho app đó (cài lại sẽ hỏi lại).
+    const now = new Date().toISOString();
+    await this.db.execute('UPDATE core_net_grants SET deleted_at = ?, updated_at = ? WHERE app_id = ? AND deleted_at IS NULL', [now, now, appId]);
+    await this.refreshGrants();
   };
 
   reorder = async (appIds: string[]): Promise<void> => {
@@ -550,6 +565,7 @@ export class RuntimeImpl implements Runtime {
   };
 
   closeForeground = (): void => {
+    this.accessResolver?.(false); // rời app khi hộp thoại còn mở = Không (app nền không được giữ hộp thoại)
     this.live.closeForeground();
     this.publishLive();
   };
@@ -585,6 +601,7 @@ export class RuntimeImpl implements Runtime {
       console.log(`[miniapp] ${appId} ready sau ${ms} ms`);
     }
     this.readyApps.add(appId);
+    this.configSeen.set(appId, JSON.stringify(this.configOfApp(appId)));
     (this.readyWaiters.get(appId) ?? []).forEach((f) => f());
     this.readyWaiters.delete(appId);
     void this.flushQueuedIntents(appId);
@@ -660,6 +677,8 @@ export class RuntimeImpl implements Runtime {
       tenantId: () => this.s.session?.tenantId ?? null,
       isReadOnly: () => this.ent.isReadOnly(),
       sdkInfo: () => ({ sdkVersion: SDK_VERSION, platform: Platform.OS }),
+      appConfig: () => this.configOfApp(appId),
+      isForeground: () => this.s.foreground === appId,
       db: {
         all: (sql, params) => this.db.getAll(sql, params as unknown[]),
         run: async (sql, params) => void (await this.db.execute(sql, params as unknown[])),
@@ -685,7 +704,12 @@ export class RuntimeImpl implements Runtime {
         get: (id) => this.files.get(appId, id, hasScope('core.files:read')),
         remove: (id) => this.files.remove(appId, id),
       },
-      net: { fetch: nativeNetFetch },
+      net: {
+        // Đọc LÚC GỌI (không bắt lúc dựng Host): thu hồi / đổi cấu hình có hiệu lực ở bước chuyển hướng kế tiếp.
+        extraHosts: () => extraHostsOf(appId, this.configOfApp(appId), this.s.netGrants),
+        requestAccess: (host, reason) => this.askAccess(row, host, reason),
+        fetch: nativeNetFetch,
+      },
       ui: {
         toast: (text) => this.pushToast({ kind: 'info', text }),
         pickImage: async ({ multiple }) => {
@@ -724,6 +748,12 @@ export class RuntimeImpl implements Runtime {
           }
           return { files };
         },
+        openUrl: async (url) => {
+          // Custom Tabs: trả về ngay khi trình duyệt mở (không chờ đóng) — app vẫn sống, chỉ bị che.
+          WebBrowser.openBrowserAsync(url, { showTitle: true, enableBarCollapsing: false }).catch(() =>
+            this.pushToast({ kind: 'error', text: 'Không mở được trình duyệt trong app' }),
+          );
+        },
         share: async ({ title, text, url }) => {
           await Share.share({ title, message: [text, url].filter(Boolean).join('\n'), ...(url ? { url } : {}) });
         },
@@ -734,6 +764,71 @@ export class RuntimeImpl implements Runtime {
       },
     };
   }
+
+  // ---------- cấu hình app + domain người dùng cho phép (vòng 6) ----------
+  /** `catalog.apps[].config` của bản catalog đã cache (offline vẫn có); chưa có → `{}`. */
+  private configOfApp(appId: string): Record<string, unknown> {
+    return configOf(this.catalogResp?.apps.find((a) => a.id === appId)?.config);
+  }
+
+  /** Báo app ĐANG SỐNG khi cấu hình của nó đổi sau một lần catalog thành công (sự kiện `config`). */
+  private emitConfigChanges(): void {
+    for (const appId of this.live.live) {
+      if (!this.readyApps.has(appId)) continue;
+      const cfg = this.configOfApp(appId);
+      const json = JSON.stringify(cfg);
+      if (this.configSeen.get(appId) === json) continue;
+      this.configSeen.set(appId, json);
+      this.channels.get(appId)?.emit('config', cfg);
+    }
+  }
+
+  /** Đọc bảng grant local → bản đồ trong state. Gọi ngay sau khi máy này ghi/thu hồi và ở nhịp thăm dò 5 s (grant từ máy khác). */
+  private async refreshGrants(): Promise<void> {
+    try {
+      const rows = await this.db.getAll<GrantRow>('SELECT app_id, host, created_at FROM core_net_grants WHERE deleted_at IS NULL');
+      const next = liveGrants(rows);
+      if (JSON.stringify(next) !== JSON.stringify(this.s.netGrants)) this.set({ netGrants: next });
+    } catch {
+      // bảng chưa có (schema đang dựng lại) — nhịp sau
+    }
+  }
+
+  /** Hộp thoại hệ thống xin quyền host; mỗi lúc một hộp (hàng đợi tuần tự). Cho phép ⇒ ghi grant TRƯỚC khi trả (offline vẫn dùng được). */
+  private askAccess(row: AppRow, host: string, reason: string | null): Promise<boolean> {
+    const run = async (): Promise<boolean> => {
+      // Hộp trước trong hàng có thể đã cho phép chính host này.
+      if (extraHostsOf(row.app_id, this.configOfApp(row.app_id), this.s.netGrants).includes(host)) return true;
+      if (this.s.foreground !== row.app_id) return false;
+      const answer = await new Promise<boolean>((resolve) => {
+        this.accessResolver = resolve;
+        this.set({ accessPrompt: { appId: row.app_id, appName: row.name, host, reason } });
+      });
+      this.accessResolver = null;
+      this.set({ accessPrompt: null });
+      if (!answer) return false;
+      const now = new Date().toISOString();
+      await this.db.execute('INSERT INTO core_net_grants (id, tenant_id, app_id, host, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [
+        uuid(), this.s.session?.tenantId ?? null, row.app_id, host, now, now,
+      ]);
+      await this.refreshGrants();
+      return true;
+    };
+    const next = this.accessQueue.then(run, run);
+    this.accessQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  answerAccessPrompt = (allow: boolean): void => {
+    this.accessResolver?.(allow);
+  };
+
+  revokeNetGrant = async (appId: string, host: string): Promise<void> => {
+    const now = new Date().toISOString();
+    await this.db.execute('UPDATE core_net_grants SET deleted_at = ?, updated_at = ? WHERE app_id = ? AND host = ? AND deleted_at IS NULL', [now, now, appId, host]);
+    await this.refreshGrants();
+    this.pushToast({ kind: 'info', text: `Đã thu hồi quyền truy cập ${host}` });
+  };
 
   // ---------- đồng bộ ----------
   private async tick(): Promise<void> {
@@ -768,6 +863,10 @@ export class RuntimeImpl implements Runtime {
       await this.reconcileInstallations(q.count);
       await this.watchdog(connected);
       if (Date.now() - this.lastProbe >= 5000 && !this.probing) void this.probeNotifyApps();
+      if (Date.now() - this.lastGrantProbe >= 5000) {
+        this.lastGrantProbe = Date.now();
+        await this.refreshGrants();
+      }
     } catch {
       // DB đang bận — nhịp sau
     }

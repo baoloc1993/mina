@@ -1,0 +1,53 @@
+{
+  "id": "vn.app.news",
+  "name": "Đọc báo",
+  "version": "0.1.0",
+  "sdk": "^0.1.2",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "description": "Đọc tin từ đúng những báo bạn chọn: thêm nguồn RSS bất kỳ, lưu đọc sau để xem cả khi mất mạng, lưu bài thành ghi chú hoặc đặt nhắc đọc.",
+  "scopes": [
+    "db.own",
+    "net",
+    "net.user-approved",
+    "intent.send",
+    "ui.native"
+  ],
+  "tables": [
+    "sources",
+    "items"
+  ],
+  "intents": {
+    "sends": [
+      {
+        "type": "note.create",
+        "version": "1"
+      },
+      {
+        "type": "calendar.reminder.create",
+        "version": "1"
+      }
+    ],
+    "receives": [
+      {
+        "type": "news.open",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "required": [
+            "itemId"
+          ],
+          "properties": {
+            "itemId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "offline": true,
+  "network": []
+}

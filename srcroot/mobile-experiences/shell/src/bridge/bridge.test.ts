@@ -221,7 +221,7 @@ describe('sdk / auth', () => {
   });
   test('sdk.info báo readOnly', async () => {
     const { call } = setup([], {}, true);
-    expect((await call('sdk.info')).result).toMatchObject({ appId: 'vn.app.hello', sdkVersion: '0.1.1', readOnly: true });
+    expect((await call('sdk.info')).result).toMatchObject({ appId: 'vn.app.hello', sdkVersion: '0.1.2', readOnly: true });
   });
   test('auth.getAppToken dùng app_id của manifest, bỏ qua tham số app truyền', async () => {
     const { call, fake } = setup();
@@ -236,5 +236,147 @@ describe('sdk / auth', () => {
       throw Object.assign(new Error('x'), { code: 'OFFLINE' });
     };
     expect((await call('auth.getAppToken')).error?.code).toBe('OFFLINE');
+  });
+});
+
+// ---------------- SDK 0.1.2 (vòng 6) ----------------
+const W6 = [...ALL, 'net.user-approved'];
+function setup6(opts: Parameters<typeof makeFakeHost>[0] = {}, scopes = W6, over: Partial<ReturnType<typeof manifestWith>> = {}) {
+  const fake = makeFakeHost(opts);
+  const ctx: BridgeContext = { manifest: { ...manifestWith(scopes), ...over }, tablePrefix: 'app_hello', host: fake.host };
+  const call = (method: string, params?: RpcRequest['params']) => handleRpc({ jsonrpc: '2.0', id: 1, method, params }, ctx);
+  return { fake, call };
+}
+
+describe('sdk.info().config (AC-6)', () => {
+  test('trả đúng object cấu hình từ Host; chưa có → {}', async () => {
+    expect((await setup6({ config: { network: ['a.vn'], sources: [1] } }).call('sdk.info')).result).toMatchObject({ sdkVersion: '0.1.2', config: { network: ['a.vn'], sources: [1] } });
+    expect((await setup6().call('sdk.info')).result).toMatchObject({ config: {} });
+  });
+});
+
+describe('net.requestAccess (AC-5)', () => {
+  test('host chưa được phép → Host hỏi đúng 1 lần với host + lý do; Cho phép → granted true', async () => {
+    const asked: unknown[] = [];
+    const { call, fake } = setup6();
+    fake.host.net.requestAccess = async (h, r) => (asked.push([h, r]), true);
+    expect((await call('net.requestAccess', { host: 'blog.example.dev', reason: 'Để tải tin' })).result).toEqual({ granted: true });
+    expect(asked).toEqual([['blog.example.dev', 'Để tải tin']]);
+  });
+  test('Không cho phép → {granted:false}, không lỗi', async () => {
+    const r = await setup6({ grantAnswer: false }).call('net.requestAccess', { host: 'blog.example.dev' });
+    expect(r).toMatchObject({ result: { granted: false } });
+    expect(r.error).toBeUndefined();
+  });
+  test('host đã ∈ manifest.network hoặc extraHosts (config/grant) → true, KHÔNG hỏi', async () => {
+    const a = setup6();
+    expect((await a.call('net.requestAccess', { host: 'example.com' })).result).toEqual({ granted: true });
+    expect(a.fake.calls['net.requestAccess']).toBeUndefined();
+    const b = setup6({ extraHosts: ['vnexpress.net'] });
+    expect((await b.call('net.requestAccess', { host: 'vnexpress.net' })).result).toEqual({ granted: true });
+    expect(b.fake.calls['net.requestAccess']).toBeUndefined();
+  });
+  test('app nền → {granted:false}, hộp thoại không mở', async () => {
+    const { call, fake } = setup6({ foreground: false });
+    expect((await call('net.requestAccess', { host: 'blog.example.dev' })).result).toEqual({ granted: false });
+    expect(fake.calls['net.requestAccess']).toBeUndefined();
+  });
+  test('tenant chỉ đọc vẫn được hỏi (grant không phải dữ liệu nghiệp vụ)', async () => {
+    const { call, fake } = setup6({ readOnly: true });
+    expect((await call('net.requestAccess', { host: 'blog.example.dev' })).result).toEqual({ granted: true });
+    expect(fake.calls['net.requestAccess']).toBe(1);
+  });
+  test.each([
+    ['chữ hoa', 'Blog.example.dev'], ['wildcard', '*.example.dev'], ['có scheme', 'https://blog.example.dev'], ['có path', 'blog.example.dev/rss'],
+    ['user:pass@', 'u:p@blog.example.dev'], ['cổng quá lớn', 'blog.example.dev:99999'], ['cổng 0', 'a.vn:0'], ['rỗng', ''], ['khoảng trắng', 'a b.vn'],
+    ['dấu chấm đầu', '.a.vn'], ['IPv6', '[::1]'], ['quá dài', `${'a'.repeat(251)}.vn`],
+  ])('host %s → INVALID_REQUEST, không hỏi', async (_n, host) => {
+    const { call, fake } = setup6();
+    expect((await call('net.requestAccess', { host })).error?.code).toBe('INVALID_REQUEST');
+    expect(fake.total()).toBe(0);
+  });
+  test('reason > 120 ký tự hoặc sai kiểu → INVALID_REQUEST; host thiếu → INVALID_REQUEST', async () => {
+    const { call, fake } = setup6();
+    expect((await call('net.requestAccess', { host: 'a.vn', reason: 'x'.repeat(121) })).error?.code).toBe('INVALID_REQUEST');
+    expect((await call('net.requestAccess', { host: 'a.vn', reason: 5 as unknown as string })).error?.code).toBe('INVALID_REQUEST');
+    expect((await call('net.requestAccess', {})).error?.code).toBe('INVALID_REQUEST');
+    expect(fake.total()).toBe(0);
+  });
+  test('thiếu net.user-approved (dù có net) hoặc thiếu net → SCOPE_DENIED, 0 lời gọi', async () => {
+    const a = setup6({}, ALL);
+    expect((await a.call('net.requestAccess', { host: 'a.vn' })).error?.code).toBe('SCOPE_DENIED');
+    const b = setup6({}, ['net.user-approved', 'ui.native']);
+    expect((await b.call('net.requestAccess', { host: 'a.vn' })).error?.code).toBe('SCOPE_DENIED');
+    expect(a.fake.total() + b.fake.total()).toBe(0);
+  });
+  test('lý do rỗng/khoảng trắng → Host nhận null (dùng câu mặc định)', async () => {
+    const got: unknown[] = [];
+    const { call, fake } = setup6();
+    fake.host.net.requestAccess = async (_h, r) => (got.push(r), false);
+    await call('net.requestAccess', { host: 'a.vn', reason: '   ' });
+    await call('net.requestAccess', { host: 'a.vn' });
+    expect(got).toEqual([null, null]);
+  });
+});
+
+describe('net.fetch với whitelist mở rộng (AC-5)', () => {
+  test('host trong extraHosts (grant/config) gọi được; host ngoài vẫn NET_BLOCKED', async () => {
+    const { call } = setup6({ extraHosts: ['blog.example.dev', '10.0.2.2:8787'] });
+    expect((await call('net.fetch', { url: 'https://blog.example.dev/rss' })).error).toBeUndefined();
+    expect((await call('net.fetch', { url: 'http://10.0.2.2:8787/feed.xml' })).error).toBeUndefined();
+    expect((await call('net.fetch', { url: 'http://10.0.2.2:9999/feed.xml' })).error?.code).toBe('NET_BLOCKED');
+    expect((await call('net.fetch', { url: 'https://example.dev/' })).error?.code).toBe('NET_BLOCKED');
+    expect((await call('net.fetch', { url: 'https://evil.com/' })).error?.code).toBe('NET_BLOCKED');
+  });
+  test('grant của host không mở sang cổng khác hay subdomain; mục có cổng chỉ khớp đúng cổng', async () => {
+    const { call } = setup6({ extraHosts: ['a.vn'] });
+    expect((await call('net.fetch', { url: 'https://a.vn:8443/x' })).error?.code).toBe('NET_BLOCKED');
+    expect((await call('net.fetch', { url: 'https://a.vn:443/x' })).error).toBeUndefined();
+    expect((await call('net.fetch', { url: 'https://www.a.vn/x' })).error?.code).toBe('NET_BLOCKED');
+  });
+  test('thu hồi giữa chừng: isAllowed đọc lại extraHosts ở mỗi bước chuyển hướng', async () => {
+    const hosts = ['blog.example.dev'];
+    const { call, fake } = setup6();
+    fake.host.net.extraHosts = () => hosts;
+    const seen: boolean[] = [];
+    fake.host.net.fetch = async (_r, isAllowed) => {
+      seen.push(isAllowed('https://blog.example.dev/hop1'));
+      hosts.length = 0; // thu hồi ở S4 trong lúc request đang bay
+      seen.push(isAllowed('https://blog.example.dev/hop2'));
+      return { status: 200, headers: {}, body: '' };
+    };
+    await call('net.fetch', { url: 'https://blog.example.dev/rss' });
+    expect(seen).toEqual([true, false]);
+    expect((await call('net.fetch', { url: 'https://blog.example.dev/rss' })).error?.code).toBe('NET_BLOCKED');
+  });
+});
+
+describe('ui.openUrl (AC-6)', () => {
+  test('http(s) hợp lệ → Host mở đúng URL; không qua whitelist mạng', async () => {
+    const opened: string[] = [];
+    const { call, fake } = setup6();
+    fake.host.ui.openUrl = async (u) => void opened.push(u);
+    expect((await call('ui.openUrl', { url: 'https://other.example.org/a?b=1#c' })).result).toBe(true);
+    expect((await call('ui.openUrl', { url: 'http://10.0.2.2:8787/bai.html' })).result).toBe(true);
+    expect(opened).toEqual(['https://other.example.org/a?b=1#c', 'http://10.0.2.2:8787/bai.html']);
+  });
+  test.each([
+    ['javascript:', 'javascript:alert(1)'], ['intent:', 'intent://x#Intent;scheme=a;end'], ['file:', 'file:///etc/passwd'], ['ftp:', 'ftp://a.vn/x'],
+    ['data:', 'data:text/html,hi'], ['không phải URL', 'abc'], ['user:pass@', 'https://u:p@a.vn/'], ['quá dài', `https://a.vn/${'x'.repeat(2100)}`],
+  ])('%s → INVALID_REQUEST, Host không bị gọi', async (_n, url) => {
+    const { call, fake } = setup6();
+    expect((await call('ui.openUrl', { url })).error?.code).toBe('INVALID_REQUEST');
+    expect(fake.total()).toBe(0);
+  });
+  test('app nền → APP_SUSPENDED, Host không bị gọi; thiếu ui.native → SCOPE_DENIED', async () => {
+    const a = setup6({ foreground: false });
+    expect((await a.call('ui.openUrl', { url: 'https://a.vn/' })).error?.code).toBe('APP_SUSPENDED');
+    expect(a.fake.total()).toBe(0);
+    const b = setup6({}, ['net']);
+    expect((await b.call('ui.openUrl', { url: 'https://a.vn/' })).error?.code).toBe('SCOPE_DENIED');
+    expect(b.fake.total()).toBe(0);
+  });
+  test('chỉ đọc vẫn mở được (đọc báo khi hết ân hạn)', async () => {
+    expect((await setup6({ readOnly: true }).call('ui.openUrl', { url: 'https://a.vn/' })).result).toBe(true);
   });
 });

@@ -52,6 +52,10 @@ export interface MockCallbacks {
   /** Mở hộp chọn tệp (đã lọc theo `mime`); trả danh sách file (rỗng = người dùng huỷ). */
   pickFile?(opts: { mime: string[]; multiple: boolean }): Promise<{ name: string; mime: string; base64: string }[]>;
   share?(s: { title: string; text: string; url: string | null }): Promise<void>;
+  /** Hộp xác nhận quyền host (shell thật: hộp thoại hệ thống C9; mock: `window.confirm`). Không có ⇒ coi như Không. */
+  confirmAccess?(host: string, reason: string | null, appName: string): Promise<boolean>;
+  /** Trình duyệt trong app (shell thật: Custom Tabs; mock: `window.open`). */
+  openUrl?(url: string): void;
   onDbWrite?(): void;
 }
 
@@ -63,6 +67,10 @@ export interface MockHostOptions {
   netMode: () => NetMode;
   callbacks?: MockCallbacks;
   clock?: () => number;
+  /** Cấu hình app (file `mock/config/<app_id>.json`); mặc định `{}`. */
+  config?: () => Record<string, unknown>;
+  /** App đang hiện ở màn hình? Mặc định true. */
+  foreground?: () => boolean;
 }
 
 const MAX_HOPS = 5;
@@ -98,6 +106,8 @@ export function createMockHost(o: MockHostOptions): MockHost {
     tenantId: () => 'mock-tenant',
     isReadOnly: () => o.netMode() === 'ro',
     sdkInfo: () => ({ sdkVersion: SDK_VERSION, platform: 'mock-web' }),
+    appConfig: () => o.config?.() ?? {},
+    isForeground: () => o.foreground?.() ?? true,
 
     db: {
       all: async (sql, params) => o.driver.all(sql, params),
@@ -183,6 +193,25 @@ export function createMockHost(o: MockHostOptions): MockHost {
     },
 
     net: {
+      // config.network ∪ grant còn sống của app này — đọc lúc gọi (thu hồi có hiệu lực ngay), cùng hợp đồng `net-user-approved`.
+      extraHosts: () => {
+        const cfg = o.config?.() ?? {};
+        const fromCfg = Array.isArray(cfg.network) ? (cfg.network as unknown[]).filter((h): h is string => typeof h === 'string') : [];
+        const rows = o.driver.all('SELECT host FROM core_net_grants WHERE app_id = ? AND deleted_at IS NULL', [o.manifest().id]);
+        return [...fromCfg, ...rows.map((r) => String(r.host))];
+      },
+      requestAccess: async (hostName, reason) => {
+        const m = o.manifest();
+        const yes = (await cb.confirmAccess?.(hostName, reason, m.name)) ?? false;
+        if (!yes) return false;
+        const now = nowIso();
+        o.driver.run(
+          'INSERT INTO core_net_grants (id, tenant_id, app_id, host, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [newId(), 'mock-tenant', m.id, hostName, now, now],
+        );
+        noteWrite();
+        return true;
+      },
       fetch: async (req, isAllowed) => {
         if (o.netMode() === 'offline') throw new BridgeError('OFFLINE', 'Đang offline — không gửi request');
         let url = req.url;
@@ -248,6 +277,9 @@ export function createMockHost(o: MockHostOptions): MockHost {
       },
       share: async (s) => {
         await cb.share?.(s);
+      },
+      openUrl: async (url) => {
+        cb.openUrl?.(url);
       },
     },
 

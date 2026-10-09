@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import { runtime, useRuntime } from '../runtime';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Screen } from '../ui/Layout';
 import { ErrorState, Pulse } from '../ui/States';
 import { ToastHost } from '../ui/Toast';
@@ -147,6 +148,16 @@ export function Router() {
   return (
     <View style={styles.root}>
       {body}
+      <ConfirmDialog
+        visible={!!rt.accessPrompt}
+        title={rt.accessPrompt ? `Cho phép ${rt.accessPrompt.appName} truy cập ${rt.accessPrompt.host}?` : ''}
+        message={rt.accessPrompt ? (rt.accessPrompt.reason ?? `${rt.accessPrompt.appName} muốn tải dữ liệu từ ${rt.accessPrompt.host}.`) : undefined}
+        notice="Bạn có thể thu hồi lại trong chi tiết app."
+        confirmLabel="Cho phép"
+        cancelLabel="Không"
+        onCancel={() => runtime.answerAccessPrompt(false)}
+        onConfirm={() => runtime.answerAccessPrompt(true)}
+      />
       <ToastHost toasts={rt.toasts} onDismiss={(id) => runtime.dismissToast(id)} />
     </View>
   );

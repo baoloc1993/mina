@@ -208,6 +208,7 @@ insert into public.core_tags (id, tenant_id, name) values (gen_random_uuid(), (s
 insert into public.core_contacts (id, tenant_id, name) values (gen_random_uuid(), (select ta from ids), 'Bố');
 insert into public.core_files (id, tenant_id, app_id, name, storage_path)
   values (gen_random_uuid(), (select ta from ids), 'vn.app.hello', 'anh.jpg', (select ta from ids) || '/f1');
+insert into public.core_net_grants (id, tenant_id, app_id, host) values (gen_random_uuid(), (select ta from ids), 'vn.app.news', 'blog.example.dev');
 
 -- App mẫu đã seed (hello-cal có cột title bắt buộc): chèn sẵn một dòng của A nếu bảng có mặt.
 do $$ begin
@@ -289,10 +290,10 @@ select cmp_ok((select count(*)::int from tt), '>=', 5, 'có ít nhất 5 bảng 
 select is((select coalesce(string_agg(t || ': ' || why, '; '), '') from rls_fail), '', 'mọi bảng có tenant_id: B đọc 0 / INSERT giả bị chặn / UPDATE-DELETE 0 dòng của A');
 
 -- ---------- Vòng 3: core_* ----------
-select is((select count(*)::int from tt where t in ('core_tags', 'core_contacts', 'core_files')), 3, 'core_tags / core_contacts / core_files mang tenant_id và nằm trong vòng lặp RLS ở trên');
-select is((select string_agg(table_name, ',' order by table_name) from public.app_tables where app_id = '_core'), 'core_contacts,core_files,core_tags', 'app_tables ghi sổ core_* với app_id = _core (upload nhận ghi)');
+select is((select count(*)::int from tt where t in ('core_tags', 'core_contacts', 'core_files', 'core_net_grants')), 4, 'core_tags / core_contacts / core_files / core_net_grants mang tenant_id và nằm trong vòng lặp RLS ở trên');
+select is((select string_agg(table_name, ',' order by table_name) from public.app_tables where app_id = '_core'), 'core_contacts,core_files,core_net_grants,core_tags', 'app_tables ghi sổ core_* với app_id = _core (upload nhận ghi)');
 select is((select count(*)::int from public.catalog_for((select ta from ids)) where id = '_core'), 0, 'app ảo _core không bao giờ xuất hiện ở catalog');
-select is((select count(*)::int from pg_publication_tables where pubname = 'powersync' and tablename in ('core_tags', 'core_contacts', 'core_files')), 3, 'core_* nằm trong publication powersync');
+select is((select count(*)::int from pg_publication_tables where pubname = 'powersync' and tablename in ('core_tags', 'core_contacts', 'core_files', 'core_net_grants')), 4, 'core_* nằm trong publication powersync');
 select pg_temp.as_user('aaaaaaaa-0000-0000-0000-0000000000a1', (select ta from ids));
 select throws_ok($$delete from public.core_tags$$, '42501', null, 'client không có quyền DELETE cứng trên core_tags');
 select throws_ok($$insert into public.core_files (id, tenant_id, app_id, name, storage_path, size) values (gen_random_uuid(), (select ta from ids), 'a', 'b', 'c', -1)$$, '23514', null, 'core_files.size âm bị CHECK chặn');

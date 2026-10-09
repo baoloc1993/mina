@@ -1,9 +1,9 @@
-// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.1, ARCHITECTURE.md §5).
+// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.2, ARCHITECTURE.md §5).
 // THUẦN TS: shell và mock SDK trên trình duyệt chạy CÙNG mã này, mọi hiệu ứng đi qua `Host`.
 // Thứ tự kiểm (bất biến): request hợp lệ → method có thật → scope → chỉ đọc → tham số → thực thi.
 // Từ chối ở bước nào thì KHÔNG có tác dụng phụ (Host không được gọi lần nào) — bảng kỳ vọng `matrix.ts` canh điều này.
 import Ajv from 'ajv';
-import { isAllowedUrl, parseUrl } from './netGuard';
+import { isAllowedUrl, isValidHost, parseUrl } from './netGuard';
 import { guardSql, SqlRejected, type GuardContext } from './sqlGuard';
 import {
   BridgeError,
@@ -18,11 +18,14 @@ import {
 export * from './types';
 export { SqlRejected } from './sqlGuard';
 
-export const SDK_VERSION = '0.1.1';
+export const SDK_VERSION = '0.1.2';
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_INTENT_BYTES = 64 * 1024;
 export const MAX_NET_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_TOAST = 120;
+const MAX_REASON = 120;
+const MAX_OPEN_URL = 2048;
+export const MAX_CONFIG_BYTES = 64 * 1024;
 const MIME_FILTER = /^[A-Za-z0-9.+-]+\/([A-Za-z0-9.+-]+|\*)$/;
 
 /** Bộ lọc MIME của `ui.pickFile` (danh sách rỗng = nhận mọi loại; `image/*` khớp mọi `image/…`). Shell và mock dùng chung. */
@@ -44,7 +47,7 @@ const ERROR_CODES = new Set<ErrorCode>([
 export const KNOWN_SCOPES = [
   'db', 'db.own',
   'core.tags:read', 'core.tags:write', 'core.contacts:read', 'core.contacts:write', 'core.files:read', 'core.files:write',
-  'intent.send', 'notify.local', 'storage.files', 'net', 'ui.native', 'auth.token',
+  'intent.send', 'notify.local', 'storage.files', 'net', 'net.user-approved', 'ui.native', 'auth.token',
 ] as const;
 
 /** Tiền tố bảng vật lý của app trong SQLite/Postgres: `<table_prefix>_`. */
@@ -96,6 +99,11 @@ function validatorFor(schema: unknown) {
     validators.set(key, v);
   }
   return v;
+}
+
+/** Whitelist hiện hành của app (đọc lúc gọi): manifest.network ∪ config.network ∪ grant của người dùng. */
+export function allowedHosts(ctx: BridgeContext): string[] {
+  return [...(ctx.manifest.network ?? []), ...ctx.host.net.extraHosts()];
 }
 
 function needTenant(ctx: BridgeContext): string {
@@ -155,6 +163,7 @@ const METHODS: Record<string, MethodDef> = {
         sdkVersion: i.sdkVersion,
         platform: i.platform,
         readOnly: ctx.host.isReadOnly(),
+        config: ctx.host.appConfig(),
       };
     },
   },
@@ -401,12 +410,25 @@ const METHODS: Record<string, MethodDef> = {
         if (typeof raw.timeoutMs !== 'number' || !(raw.timeoutMs > 0)) bad('"timeoutMs" phải là số dương');
         timeoutMs = Math.min(raw.timeoutMs as number, 30000);
       }
-      const allow = (u: string) => isAllowedUrl(u, ctx.manifest.network);
+      const allow = (u: string) => isAllowedUrl(u, allowedHosts(ctx)); // đọc lại mỗi bước: thu hồi giữa chừng có hiệu lực ngay
       // Chặn TRƯỚC khi hỏi mạng: domain ngoài danh sách không bao giờ rời máy, kể cả khi đang offline.
       if (!allow(url)) throw new BridgeError('NET_BLOCKED', 'Domain không có trong danh sách network của app', parseUrl(url)?.hostname);
       const res = await ctx.host.net.fetch({ url, method, headers, body, timeoutMs }, allow);
       if (res.body.length > MAX_NET_BODY_BYTES) throw new BridgeError('NET_ERROR', 'Phản hồi quá 5 MB');
       return res;
+    },
+  },
+
+  'net.requestAccess': {
+    // SDK 0.1.2. Không phải method "ghi dữ liệu nghiệp vụ" (grant là dữ liệu nền tảng): tenant chỉ đọc vẫn được hỏi và ghi.
+    scopes: ['net', 'net.user-approved'],
+    run: async (ctx, raw) => {
+      const host = str(raw, 'host', 1, 253);
+      if (!isValidHost(host)) bad('"host" phải là host chữ thường, không wildcard/scheme/path/user:pass@ (vd "blog.example.dev", cổng tuỳ chọn)');
+      const reason = optStr(raw, 'reason', MAX_REASON);
+      if (allowedHosts(ctx).some((h) => h.toLowerCase() === host)) return { granted: true }; // đã được phép: không hỏi, không ghi
+      if (!ctx.host.isForeground()) return { granted: false }; // app nền không được bật hộp thoại
+      return { granted: await ctx.host.net.requestAccess(host, reason && reason.trim() ? reason.trim() : null) };
     },
   },
 
@@ -438,6 +460,19 @@ const METHODS: Record<string, MethodDef> = {
         });
       }
       return ctx.host.ui.pickFile({ mime, multiple: raw.multiple === true });
+    },
+  },
+  'ui.openUrl': {
+    // SDK 0.1.2 — KHÔNG qua whitelist mạng: người dùng thấy thanh địa chỉ, trang chạy tách khỏi WebView của app.
+    scopes: ['ui.native'],
+    run: async (ctx, raw) => {
+      const url = str(raw, 'url', 1, MAX_OPEN_URL);
+      const u = parseUrl(url);
+      if (!u || (u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname) bad('"url" phải là địa chỉ http(s)');
+      if (u && (u.username || u.password)) bad('"url" không được chứa user:pass@');
+      if (!ctx.host.isForeground()) throw new BridgeError('APP_SUSPENDED', 'App đang chạy nền — không mở được trình duyệt');
+      await ctx.host.ui.openUrl(url);
+      return true;
     },
   },
   'ui.share': {

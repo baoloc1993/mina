@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { parseEntitlementUntil } from "./admin.ts";
+import { parseEntitlementUntil, validateConfig } from "./admin.ts";
 import { RegistryError } from "./errors.ts";
 import { readManifest, receivesOf } from "./manifest.ts";
 import { renderSyncRules } from "./syncrules.ts";
@@ -71,6 +71,26 @@ test("set-entitlement: ngày ISO → UTC, null → null, sai → BAD_DATE", () =
 test("sync rules: installations có id + position; bucket core theo tenant; mỗi app một bucket", () => {
   const y = renderSyncRules([{ id: "vn.app.hello", table_prefix: "app_hello", tables: ["app_hello_items"] }]);
   assert.match(y, /select app_id as id, app_id, tenant_id, version, enabled, position, installed_at, updated_at from installations/);
-  assert.match(y, /  core:\n    parameters: select request\.jwt\(\) ->> 'tenant_id' as tenant_id\n    data:\n      - select \* from core_contacts where tenant_id = bucket\.tenant_id\n      - select \* from core_files[^\n]*\n      - select \* from core_tags/);
+  assert.match(y, /  core:\n    parameters: select request\.jwt\(\) ->> 'tenant_id' as tenant_id\n    data:\n      - select \* from core_contacts where tenant_id = bucket\.tenant_id\n      - select \* from core_files[^\n]*\n      - select \* from core_net_grants[^\n]*\n      - select \* from core_tags/);
   assert.match(y, /  app_hello:\n/);
+});
+
+test("scope net.user-approved (vòng 6): hợp lệ khi đi cùng net; thiếu net → BAD_MANIFEST", () => {
+  assert.ok(read({ scopes: ["net", "net.user-approved"], network: [] }).scopes.includes("net.user-approved"));
+  bad({ scopes: ["net.user-approved"] });
+  bad({ scopes: ["db.own", "ui.native", "net.user-approved"] });
+});
+
+test("config app (vòng 6): object ≤ 64 KB; network phải là host hợp lệ không wildcard", () => {
+  assert.deepEqual(validateConfig({ sources: [], network: ["vnexpress.net", "10.0.2.2:8787"] }).network, ["vnexpress.net", "10.0.2.2:8787"]);
+  assert.deepEqual(validateConfig({}), {});
+  for (const x of [null, [], "x", 5]) assert.throws(() => validateConfig(x), (e) => e instanceof RegistryError && e.code === "BAD_CONFIG");
+  for (const network of ["a.vn", ["*.vn"], ["https://a.vn"], ["A.VN"], [5], ["a.vn/rss"], ["user:pw@a.vn"]]) {
+    assert.throws(() => validateConfig({ network }), (e) => e instanceof RegistryError && e.code === "BAD_CONFIG", JSON.stringify(network));
+  }
+  assert.throws(() => validateConfig({ big: "x".repeat(70_000) }), (e) => e instanceof RegistryError && e.code === "BAD_CONFIG");
+});
+
+test("sync rules: bucket core có core_net_grants (vòng 6)", () => {
+  assert.match(renderSyncRules([]), /select \* from core_net_grants where tenant_id = bucket\.tenant_id/);
 });

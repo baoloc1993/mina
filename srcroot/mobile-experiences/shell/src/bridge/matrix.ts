@@ -22,7 +22,7 @@ export const RECEIVER_SCHEMA = {
   additionalProperties: false,
 };
 
-export function makeFakeHost(opts: { readOnly?: boolean } = {}): FakeHost {
+export function makeFakeHost(opts: { readOnly?: boolean; foreground?: boolean; extraHosts?: string[]; config?: Record<string, unknown>; grantAnswer?: boolean } = {}): FakeHost {
   const calls: Calls = {};
   let readOnly = !!opts.readOnly;
   const hit = (k: string) => {
@@ -34,6 +34,8 @@ export function makeFakeHost(opts: { readOnly?: boolean } = {}): FakeHost {
     tenantId: () => 'T1',
     isReadOnly: () => readOnly,
     sdkInfo: () => ({ sdkVersion: SDK_VERSION, platform: 'test' }),
+    appConfig: () => opts.config ?? {},
+    isForeground: () => opts.foreground ?? true,
     db: {
       all: async () => (hit('db.all'), []),
       run: async () => void hit('db.run'),
@@ -53,6 +55,8 @@ export function makeFakeHost(opts: { readOnly?: boolean } = {}): FakeHost {
       remove: async () => void hit('storage.remove'),
     },
     net: {
+      extraHosts: () => opts.extraHosts ?? [],
+      requestAccess: async () => (hit('net.requestAccess'), opts.grantAnswer ?? true),
       fetch: async (_r, isAllowed) => {
         hit('net.fetch');
         isAllowed('https://example.com/');
@@ -64,6 +68,7 @@ export function makeFakeHost(opts: { readOnly?: boolean } = {}): FakeHost {
       pickImage: async () => (hit('ui.pickImage'), { files: [] }),
       pickFile: async () => (hit('ui.pickFile'), { files: [] }),
       share: async () => void hit('ui.share'),
+      openUrl: async () => void hit('ui.openUrl'),
     },
     intent: {
       receivers: (type, version) => {
@@ -134,7 +139,9 @@ export const CASES: MatrixCase[] = [
   { namespace: 'storage', method: 'storage.get', params: { fileId: 'f1' }, grants: ['storage.files'], writes: false, effect: 'storage.get' },
   { namespace: 'storage', method: 'storage.remove', params: { fileId: 'f1' }, grants: ['storage.files'], writes: true, effect: 'storage.remove' },
   { namespace: 'net', method: 'net.fetch', params: { url: 'https://example.com/a' }, grants: ['net'], writes: false, effect: 'net.fetch' },
+  { namespace: 'net', method: 'net.requestAccess', params: { host: 'new.example.org', reason: 'Để tải tin' }, grants: ['net', 'net.user-approved'], writes: false, effect: 'net.requestAccess' },
   { namespace: 'ui', method: 'ui.toast', params: { text: 'xin chào' }, grants: ['ui.native'], writes: false, effect: 'ui.toast' },
+  { namespace: 'ui', method: 'ui.openUrl', params: { url: 'https://example.com/a' }, grants: ['ui.native'], writes: false, effect: 'ui.openUrl' },
   { namespace: 'ui', method: 'ui.pickImage', params: {}, grants: ['ui.native', 'storage.files'], writes: true, effect: 'ui.pickImage' },
   { namespace: 'ui', method: 'ui.pickFile', params: { mime: ['application/pdf'] }, grants: ['ui.native', 'storage.files'], writes: true, effect: 'ui.pickFile' },
   { namespace: 'ui', method: 'ui.share', params: { text: 'a' }, grants: ['ui.native'], writes: false, effect: 'ui.share' },
@@ -149,7 +156,7 @@ export interface CaseRun {
 }
 
 /** Chạy một ca với manifest chỉ có `scopes`, Host giả mới tinh. */
-export async function runCase(c: MatrixCase, scopes: string[], opts: { readOnly?: boolean } = {}): Promise<CaseRun> {
+export async function runCase(c: MatrixCase, scopes: string[], opts: { readOnly?: boolean; foreground?: boolean } = {}): Promise<CaseRun> {
   const fake = makeFakeHost(opts);
   const ctx: BridgeContext = { manifest: manifestWith(scopes), tablePrefix: 'app_hello', host: fake.host };
   const resp = await handleRpc({ jsonrpc: '2.0', id: 1, method: c.method, params: c.params }, ctx);

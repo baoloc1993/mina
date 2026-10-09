@@ -1,19 +1,19 @@
-// SDK v0 (@platform/miniapp-sdk 0.1.1) — chuỗi JS ES5 được chèn vào <head> của mini app TRƯỚC script của app.
+// SDK v0 (@platform/miniapp-sdk 0.1.2) — chuỗi JS ES5 được chèn vào <head> của mini app TRƯỚC script của app.
 // Dùng chung cho shell (WebView Android) và mock SDK (iframe trên trình duyệt) — một nguồn, hai nơi chạy.
 // Quy tắc viết chuỗi này: KHÔNG dùng dấu huyền, "${", hay dấu gạch chéo ngược (template literal của TS sẽ diễn giải chúng).
 //
 // Vận chuyển: JSON-RPC 2.0. Gửi bằng window.__miniappTransport(chuỗiJSON) nếu có (mock), không thì
 // window.ReactNativeWebView.postMessage(chuỗiJSON) (shell). Nhận phản hồi: shell/mock gọi window.__miniappResolve(raw).
-// Sự kiện shell → app: window.__miniappEvent(tên, payload) với tên suspend | resume | intent | sync.
+// Sự kiện shell → app: window.__miniappEvent(tên, payload) với tên suspend | resume | intent | sync | config.
 export const INJECTED_SDK = `
 (function () {
   if (window.miniapp) return; // đã được chèn (vào HTML hoặc qua WebView) — không định nghĩa lại
   var SUSPEND_HANDLER_MS = 450;
   var MAX_QUEUED_INTENTS = 20;
-  var EVENTS = ['suspend', 'resume', 'intent', 'sync'];
+  var EVENTS = ['suspend', 'resume', 'intent', 'sync', 'config'];
   var pending = {};
   var seq = 0;
-  var handlers = { suspend: [], resume: [], intent: [], sync: [] };
+  var handlers = { suspend: [], resume: [], intent: [], sync: [], config: [] };
   var queuedIntents = [];
 
   function fail(code, message) { var e = new Error(message); e.code = code; return e; }
@@ -163,10 +163,15 @@ export const INJECTED_SDK = `
       fetch: function (url, opts) {
         var x = o(opts);
         return call('net.fetch', { url: url, method: x.method, headers: x.headers, body: x.body, timeoutMs: x.timeoutMs });
+      },
+      requestAccess: function (r) {
+        var x = o(r);
+        return call('net.requestAccess', { host: x.host, reason: x.reason });
       }
     }),
     ui: Object.freeze({
       toast: function (text) { return call('ui.toast', { text: text }); },
+      openUrl: function (url) { return call('ui.openUrl', { url: url }); },
       pickImage: function (opts) { return call('ui.pickImage', { multiple: !!o(opts).multiple }); },
       pickFile: function (opts) { return call('ui.pickFile', { mime: o(opts).mime, multiple: !!o(opts).multiple }); },
       share: function (s) { return call('ui.share', { title: o(s).title, text: o(s).text, url: o(s).url }); }

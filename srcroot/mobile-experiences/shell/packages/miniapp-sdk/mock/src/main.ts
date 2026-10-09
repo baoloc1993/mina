@@ -194,10 +194,13 @@ async function main() {
 
   const bus = createTabBus(() => manifest);
   db.onSaved = () => bus.notifyDb();
-  bus.onDb(() => void db.reload());
+  bus.onDb(() => void Promise.resolve(db.reload()).then(() => refreshGrants()));
   bus.announce(manifest);
+  const appConfig: Record<string, unknown> = await (await fetch(`/__mock/config/${encodeURIComponent(manifest.id)}`)).json().catch(() => ({}));
   const mock = createMockHost({
     manifest: () => manifest,
+    config: () => appConfig,
+    foreground: () => !document.hidden,
     driver: db,
     hopFetch,
     bus,
@@ -219,6 +222,16 @@ async function main() {
       },
       pickImage: ({ multiple }) => pickImages(multiple),
       pickFile: ({ mime, multiple }) => pickFiles(mime, multiple),
+      confirmAccess: async (hostName, reason, appName) => {
+        const yes = window.confirm(`Cho phép ${appName} truy cập ${hostName}?${reason ? `\n\n${reason}` : ''}`);
+        addRow({ method: 'hộp thoại quyền host (C9)', scope: 'net.user-approved', state: yes ? 'ok' : 'bad', text: yes ? 'Cho phép' : 'Không', sub: hostName });
+        queueMicrotask(refreshGrants);
+        return yes;
+      },
+      openUrl: (url) => {
+        addRow({ method: 'trình duyệt trong app', scope: 'ui.native', state: 'ok', text: 'mở tab mới', sub: url });
+        window.open(url, '_blank', 'noopener');
+      },
       share: async (s) => {
         if (navigator.share) {
           try {
@@ -296,6 +309,27 @@ async function main() {
     frame.srcdoc = injectCsp(fx.html, PRE_SCRIPT);
   };
   loadApp();
+
+  // ----- domain người dùng đã cho phép (S4 của shell: nút Thu hồi) -----
+  function refreshGrants() {
+    const rowsG = db.all('SELECT id, host FROM core_net_grants WHERE app_id = ? AND deleted_at IS NULL ORDER BY created_at', [manifest.id]);
+    $('grants').innerHTML = rowsG.length
+      ? rowsG.map((g) => `<div class="grant"><code>${esc(String(g.host))}</code> <button class="btn ghost" data-revoke="${esc(String(g.id))}" aria-label="Thu hồi ${esc(String(g.host))}">Thu hồi</button></div>`).join('')
+      : '<div class="muted">Chưa có domain nào do người dùng cho phép</div>';
+    $('grants-summary').textContent = `Domain được phép (${rowsG.length})`;
+  }
+  $('grants').addEventListener('click', (e) => {
+    const id = (e.target as HTMLElement).dataset.revoke;
+    if (!id) return;
+    const host = String(db.all('SELECT host FROM core_net_grants WHERE id = ?', [id])[0]?.host ?? '');
+    // Thu hồi = xoá mềm MỌI dòng sống cùng (app, host) — giống S4 của shell.
+    const now = new Date().toISOString();
+    db.run('UPDATE core_net_grants SET deleted_at = ?, updated_at = ? WHERE app_id = ? AND host = ? AND deleted_at IS NULL', [now, now, manifest.id, host]);
+    db.persist();
+    addRow({ method: 'thu hồi domain (S4)', scope: 'net.user-approved', state: 'ok', text: 'đã thu hồi', sub: host });
+    refreshGrants();
+  });
+  refreshGrants();
 
   // ----- thanh điều khiển -----
   const netSel = $<HTMLSelectElement>('net');

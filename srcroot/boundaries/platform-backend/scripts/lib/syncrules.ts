@@ -5,7 +5,7 @@ import type { Client } from "pg";
 export type AppTables = { id: string; table_prefix: string; tables: string[] };
 
 /** Dữ liệu dùng chung trong tenant (vòng 3): mọi tenant, không theo app đã cài. */
-export const CORE_TABLES = ["core_contacts", "core_files", "core_tags"];
+export const CORE_TABLES = ["core_contacts", "core_files", "core_net_grants", "core_tags"];
 
 export function renderSyncRules(apps: AppTables[]): string {
   const lines = [

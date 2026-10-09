@@ -27,6 +27,7 @@ export function baseTables(): Record<string, Table> {
     core_contacts: new Table({
       tenant_id: column.text, name: column.text, phone: column.text, email: column.text, note: column.text, ...CORE_TIME,
     }),
+    core_net_grants: new Table({ tenant_id: column.text, app_id: column.text, host: column.text, ...CORE_TIME }),
     core_files: new Table({
       tenant_id: column.text, app_id: column.text, name: column.text, mime: column.text, size: column.integer,
       storage_path: column.text, uploaded_at: column.text, ...CORE_TIME,

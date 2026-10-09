@@ -53,6 +53,8 @@ export interface CatalogApp {
   description?: string | null;
   scopes?: string[];
   network?: string[];
+  /** Vòng 6: cấu hình app từ server (`app_configs`); vắng = `{}`. Khoá `network` do shell diễn giải. */
+  config?: Record<string, unknown>;
 }
 
 export interface CatalogEntitlementInfo {

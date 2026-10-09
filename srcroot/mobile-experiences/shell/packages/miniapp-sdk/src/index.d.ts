@@ -1,4 +1,4 @@
-// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.1, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
+// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.2, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
 // Dùng: `/// <reference types="@platform/miniapp-sdk/types" />` hoặc `import type {} from '@platform/miniapp-sdk/types'`.
 
 export type MiniappErrorCode =
@@ -36,6 +36,7 @@ export type Scope =
   | 'notify.local'
   | 'storage.files'
   | 'net'
+  | 'net.user-approved'
   | 'ui.native'
   | 'auth.token';
 
@@ -80,6 +81,8 @@ export interface AppInfo {
   sdkVersion: string;
   platform: string;
   readOnly: boolean;
+  /** SDK 0.1.2. Cấu hình app từ server (`registry set-config`), bản cache; `{}` khi chưa có. Khoá `network` do shell dùng (host được thêm vào whitelist). */
+  config: Record<string, unknown>;
 }
 
 export interface SyncStatus {
@@ -142,6 +145,8 @@ export interface MiniappSdk {
   on(event: 'suspend' | 'resume', fn: () => void | Promise<void>): () => void;
   on(event: 'intent', fn: (i: IntentEvent) => void): () => void;
   on(event: 'sync', fn: (s: SyncStatus) => void): () => void;
+  /** SDK 0.1.2. Shell cập nhật cấu hình app trong lúc app đang sống; payload = object cấu hình mới. */
+  on(event: 'config', fn: (config: Record<string, unknown>) => void): () => void;
 }
 
 export interface Miniapp {
@@ -192,9 +197,17 @@ export interface Miniapp {
       url: string,
       opts?: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs?: number },
     ): Promise<NetResponse>;
+    /**
+     * SDK 0.1.2. Xin phép truy cập một host (khuôn như `network[]`: chữ thường, không wildcard/scheme/path/user:pass@, cổng tuỳ chọn).
+     * Host đã được phép (manifest ∪ cấu hình ∪ người dùng đã cho phép) → `{granted: true}` không hỏi; chưa có → shell hiện hộp thoại hệ thống
+     * (kèm `reason` ≤ 120 ký tự). Từ chối → `{granted: false}` (không lỗi). Cần `net` + `net.user-approved`. App nền → `{granted: false}`.
+     */
+    requestAccess(r: { host: string; reason?: string }): Promise<{ granted: boolean }>;
   };
   ui: {
     toast(text: string): Promise<true>;
+    /** SDK 0.1.2. Mở trang web trong trình duyệt trong app (Custom Tabs / SFSafariViewController); chỉ `http(s)` ≤ 2 048 ký tự, KHÔNG qua whitelist mạng. Cần `ui.native`. */
+    openUrl(url: string): Promise<true>;
     pickImage(opts?: { multiple?: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string }[] }>;
     /** SDK 0.1.1. Hộp chọn tệp hệ thống lọc theo `mime` (vd `['application/pdf']`, `['image/*']`; bỏ trống = mọi loại). Tệp sai loại hoặc > 50 MB → `INVALID_REQUEST`; huỷ → `{ files: [] }`. Cần `ui.native` + `storage.files`. */
     pickFile(opts?: { mime?: string[]; multiple?: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string; name: string; size: number }[] }>;

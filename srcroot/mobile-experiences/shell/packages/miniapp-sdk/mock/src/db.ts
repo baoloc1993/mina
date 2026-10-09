@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS core_files (
   id text PRIMARY KEY, tenant_id text, app_id text, name text NOT NULL, mime text NOT NULL, size integer NOT NULL DEFAULT 0,
   uploaded_at text, created_at text, updated_at text, deleted_at text
 );
+CREATE TABLE IF NOT EXISTS core_net_grants (
+  id text PRIMARY KEY, tenant_id text, app_id text NOT NULL, host text NOT NULL,
+  created_at text, updated_at text, deleted_at text
+);
 CREATE TABLE IF NOT EXISTS _mock_migrations (name text PRIMARY KEY);
 `;
 

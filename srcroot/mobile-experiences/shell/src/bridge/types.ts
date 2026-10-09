@@ -103,6 +103,10 @@ export interface Host {
   /** Chỉ đọc do hết ân hạn entitlement — lấy từ module entitlement, KHÔNG từ Date.now() của máy. */
   isReadOnly(): boolean;
   sdkInfo(): { sdkVersion: string; platform: string };
+  /** Cấu hình app từ server (`catalog.apps[].config`, bản cache — `{}` khi chưa có). Đọc LÚC GỌI, không bắt lúc dựng Host. */
+  appConfig(): Record<string, unknown>;
+  /** App đang hiện ở màn hình (foreground). Hộp thoại quyền chỉ mở khi true; `ui.openUrl` từ app nền → APP_SUSPENDED. */
+  isForeground(): boolean;
   db: {
     all(sql: string, params: unknown[]): Promise<unknown[]>;
     run(sql: string, params: unknown[]): Promise<void>;
@@ -122,6 +126,16 @@ export interface Host {
     remove(fileId: string): Promise<void>;
   };
   net: {
+    /**
+     * Host được thêm vào whitelist của app NGOÀI `manifest.network`: `config.network` ∪ grant còn sống của (app × tenant).
+     * Đồng bộ và đọc LÚC GỌI (thu hồi có hiệu lực ngay ở bước chuyển hướng kế tiếp).
+     */
+    extraHosts(): readonly string[];
+    /**
+     * Hộp thoại hệ thống "Cho phép <app> truy cập <host>?" (C9). Cho phép ⇒ ghi grant rồi trả true; Không ⇒ false (không ghi).
+     * Bridge chỉ gọi khi host CHƯA nằm trong whitelist và app đang foreground.
+     */
+    requestAccess(host: string, reason: string | null): Promise<boolean>;
     /** `isAllowed` PHẢI được gọi cho url ban đầu và cho mọi bước chuyển hướng trước khi gửi request tiếp. */
     fetch(
       req: { url: string; method: string; headers: Record<string, string>; body: string | null; timeoutMs: number },
@@ -134,6 +148,8 @@ export interface Host {
     /** Host PHẢI loại tệp sai `mime` hoặc > MAX_FILE_BYTES bằng `INVALID_REQUEST` TRƯỚC khi lưu (không để file mồ côi). */
     pickFile(opts: { mime: string[]; multiple: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string; name: string; size: number }[] }>;
     share(s: { title: string; text: string; url: string | null }): Promise<void>;
+    /** Trình duyệt trong app (Custom Tabs / SFSafariViewController). Bridge đã kiểm khuôn `http(s)`; Host chỉ mở. */
+    openUrl(url: string): Promise<void>;
   };
   intent: {
     receivers(type: string, version: string | null): ReceiverInfo[];

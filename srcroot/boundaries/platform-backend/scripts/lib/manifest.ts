@@ -13,13 +13,13 @@ export type Manifest = {
   [k: string]: unknown;
 };
 
-/** Phạm vi hợp lệ của manifest v0 (SDK 0.1.0). `db` là alias `db.own` của vòng 1. */
+/** Phạm vi hợp lệ của manifest v0 (SDK 0.1.0; vòng 6 thêm `net.user-approved`). `db` là alias `db.own` của vòng 1. */
 export const VALID_SCOPES = new Set([
   "db", "db.own", "core.tags:read", "core.tags:write", "core.contacts:read", "core.contacts:write",
-  "core.files:read", "core.files:write", "intent.send", "notify.local", "storage.files", "net", "ui.native", "auth.token",
+  "core.files:read", "core.files:write", "intent.send", "notify.local", "storage.files", "net", "net.user-approved", "ui.native", "auth.token",
 ]);
 const SDK_RANGE = /^[\^~<>=]*\s*\d+(\.(\d+|x|\*))*(\s+[\^~<>=]*\s*\d+(\.(\d+|x|\*))*)*$/;
-const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/;
+export const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/;
 
 /** Intent mà app NHẬN (đăng ký vào `intent_schemas`): mảng cũ hoặc `intents.receives`. */
 export function receivesOf(m: Manifest): Intent[] {
@@ -65,6 +65,9 @@ export function readManifest(dir: string): Manifest {
   }
   const badScope = (scopes as string[]).find((sc) => !VALID_SCOPES.has(sc));
   if (badScope !== undefined) bad(`scope "${badScope}" không hợp lệ — dùng: ${[...VALID_SCOPES].join(", ")}`);
+  if ((scopes as string[]).includes("net.user-approved") && !(scopes as string[]).includes("net")) {
+    bad('scope "net.user-approved" đòi kèm scope "net" (SDK 0.1.2: xin quyền host chỉ có nghĩa khi app gọi được net.fetch)');
+  }
   const isIntent = (i: unknown, needSchema: boolean): boolean => {
     const o = i as Record<string, unknown> | null;
     return !!o && typeof o === "object" && typeof o.type === "string" && typeof o.version === "string" && (!needSchema || o.schema === undefined || typeof o.schema === "object");
