@@ -62,6 +62,7 @@ export function makeFakeHost(opts: { readOnly?: boolean } = {}): FakeHost {
     ui: {
       toast: () => hit('ui.toast'),
       pickImage: async () => (hit('ui.pickImage'), { files: [] }),
+      pickFile: async () => (hit('ui.pickFile'), { files: [] }),
       share: async () => void hit('ui.share'),
     },
     intent: {
@@ -135,6 +136,7 @@ export const CASES: MatrixCase[] = [
   { namespace: 'net', method: 'net.fetch', params: { url: 'https://example.com/a' }, grants: ['net'], writes: false, effect: 'net.fetch' },
   { namespace: 'ui', method: 'ui.toast', params: { text: 'xin chào' }, grants: ['ui.native'], writes: false, effect: 'ui.toast' },
   { namespace: 'ui', method: 'ui.pickImage', params: {}, grants: ['ui.native', 'storage.files'], writes: true, effect: 'ui.pickImage' },
+  { namespace: 'ui', method: 'ui.pickFile', params: { mime: ['application/pdf'] }, grants: ['ui.native', 'storage.files'], writes: true, effect: 'ui.pickFile' },
   { namespace: 'ui', method: 'ui.share', params: { text: 'a' }, grants: ['ui.native'], writes: false, effect: 'ui.share' },
   { namespace: 'sync', method: 'sync.status', params: {}, grants: [], writes: false, effect: 'sync.status' },
   { namespace: 'auth', method: 'auth.getAppToken', params: {}, grants: ['auth.token'], writes: false, effect: 'auth.appToken' },

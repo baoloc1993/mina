@@ -126,6 +126,22 @@ function pickImages(multiple: boolean): Promise<{ name: string; mime: string; ba
   });
 }
 
+function pickFiles(mime: string[], multiple: boolean): Promise<{ name: string; mime: string; base64: string }[]> {
+  return new Promise((ok) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = mime.join(',');
+    input.multiple = multiple;
+    input.onchange = async () => {
+      const out = [];
+      for (const f of Array.from(input.files ?? [])) out.push({ name: f.name, mime: f.type || 'application/octet-stream', base64: b64(await f.arrayBuffer()) });
+      ok(out);
+    };
+    input.addEventListener('cancel', () => ok([]));
+    input.click();
+  });
+}
+
 // ---------- khởi động ----------
 async function main() {
   const list = await (await fetch('/__mock/fixtures')).json();
@@ -202,6 +218,7 @@ async function main() {
         if (phase === 'fired') toast(`Thông báo: ${n.title}`);
       },
       pickImage: ({ multiple }) => pickImages(multiple),
+      pickFile: ({ mime, multiple }) => pickFiles(mime, multiple),
       share: async (s) => {
         if (navigator.share) {
           try {

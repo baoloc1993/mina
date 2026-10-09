@@ -2,6 +2,8 @@
 // Không import DOM — chạy được cả ở Vitest (node) với driver node:sqlite và fetch giả.
 import {
   BridgeError,
+  MAX_FILE_BYTES,
+  matchesMime,
   SDK_VERSION,
   type Host,
   type IntentMode,
@@ -47,6 +49,8 @@ export interface MockCallbacks {
   onNotify?(n: { id: string; title: string; body: string; ref: string | null; at: number }, phase: 'scheduled' | 'fired' | 'cancelled'): void;
   /** Mở hộp chọn ảnh; trả danh sách file (rỗng = người dùng huỷ). */
   pickImage?(opts: { multiple: boolean }): Promise<{ name: string; mime: string; base64: string }[]>;
+  /** Mở hộp chọn tệp (đã lọc theo `mime`); trả danh sách file (rỗng = người dùng huỷ). */
+  pickFile?(opts: { mime: string[]; multiple: boolean }): Promise<{ name: string; mime: string; base64: string }[]>;
   share?(s: { title: string; text: string; url: string | null }): Promise<void>;
   onDbWrite?(): void;
 }
@@ -225,6 +229,20 @@ export function createMockHost(o: MockHostOptions): MockHost {
         for (const p of picked) {
           const s = await host.storage.put(p);
           out.push({ fileId: s.fileId, uri: s.uri, mime: p.mime });
+        }
+        return { files: out };
+      },
+      pickFile: async (opts) => {
+        const picked = (await cb.pickFile?.(opts)) ?? [];
+        // Kiểm TRƯỚC khi lưu bất kỳ tệp nào — một tệp hỏng thì không tệp nào được ghi (giống shell).
+        for (const p of picked) {
+          if (!matchesMime(opts.mime, p.mime)) throw new BridgeError('INVALID_REQUEST', `Chỉ nhận tệp loại ${opts.mime.join(', ')}`);
+          if (Math.floor((p.base64.length * 3) / 4) > MAX_FILE_BYTES) throw new BridgeError('INVALID_REQUEST', 'Tệp quá 50 MB');
+        }
+        const out: { fileId: string; uri: string; mime: string; name: string; size: number }[] = [];
+        for (const p of picked) {
+          const s = await host.storage.put(p);
+          out.push({ fileId: s.fileId, uri: s.uri, mime: p.mime, name: p.name, size: Math.floor((p.base64.length * 3) / 4) });
         }
         return { files: out };
       },

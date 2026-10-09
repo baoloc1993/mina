@@ -1,4 +1,4 @@
-// SDK v0 (@platform/miniapp-sdk 0.1.0) — chuỗi JS ES5 được chèn vào <head> của mini app TRƯỚC script của app.
+// SDK v0 (@platform/miniapp-sdk 0.1.1) — chuỗi JS ES5 được chèn vào <head> của mini app TRƯỚC script của app.
 // Dùng chung cho shell (WebView Android) và mock SDK (iframe trên trình duyệt) — một nguồn, hai nơi chạy.
 // Quy tắc viết chuỗi này: KHÔNG dùng dấu huyền, "${", hay dấu gạch chéo ngược (template literal của TS sẽ diễn giải chúng).
 //
@@ -168,6 +168,7 @@ export const INJECTED_SDK = `
     ui: Object.freeze({
       toast: function (text) { return call('ui.toast', { text: text }); },
       pickImage: function (opts) { return call('ui.pickImage', { multiple: !!o(opts).multiple }); },
+      pickFile: function (opts) { return call('ui.pickFile', { mime: o(opts).mime, multiple: !!o(opts).multiple }); },
       share: function (s) { return call('ui.share', { title: o(s).title, text: o(s).text, url: o(s).url }); }
     }),
     sync: Object.freeze({ status: function () { return call('sync.status'); } }),

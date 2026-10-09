@@ -1,4 +1,4 @@
-// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.0, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
+// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.1, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
 // Dùng: `/// <reference types="@platform/miniapp-sdk/types" />` hoặc `import type {} from '@platform/miniapp-sdk/types'`.
 
 export type MiniappErrorCode =
@@ -196,6 +196,8 @@ export interface Miniapp {
   ui: {
     toast(text: string): Promise<true>;
     pickImage(opts?: { multiple?: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string }[] }>;
+    /** SDK 0.1.1. Hộp chọn tệp hệ thống lọc theo `mime` (vd `['application/pdf']`, `['image/*']`; bỏ trống = mọi loại). Tệp sai loại hoặc > 50 MB → `INVALID_REQUEST`; huỷ → `{ files: [] }`. Cần `ui.native` + `storage.files`. */
+    pickFile(opts?: { mime?: string[]; multiple?: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string; name: string; size: number }[] }>;
     share(s: { title?: string; text?: string; url?: string }): Promise<true>;
   };
   sync: { status(): Promise<SyncStatus> };

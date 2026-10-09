@@ -1,4 +1,4 @@
-# @platform/miniapp-sdk 0.1.0
+# @platform/miniapp-sdk 0.1.1
 
 SDK v0 cho mini app của nền tảng Mina: `window.miniapp` (shell tiêm vào WebView), design tokens, kiểu TypeScript và
 **mock chạy trên trình duyệt** để dev mini app (P4) thử mà không cần máy Android.
@@ -62,7 +62,7 @@ vn.app.hello/
 | `notify` | `schedule({id, at, title, body?, ref?})`, `cancel(id)`, `list()` | `notify.local` |
 | `storage` | `put({name, mime, base64})`, `get(fileId)`, `remove(fileId)` | `storage.files` |
 | `net` | `fetch(url, {method?, headers?, body?, timeoutMs?})` | `net` + `network[]` |
-| `ui` | `toast(text)`, `pickImage({multiple?})`, `share({title?, text?, url?})` | `ui.native` (`pickImage` thêm `storage.files`) |
+| `ui` | `toast(text)`, `pickImage({multiple?})`, `pickFile({mime?, multiple?})` (0.1.1), `share({title?, text?, url?})` | `ui.native` (`pickImage`, `pickFile` thêm `storage.files`) |
 | `sync` | `status()` | luôn được |
 | `auth` | `getAppToken()` | `auth.token` |
 | — | `call(method, params)` | method nào thì scope đó; method lạ → `SCOPE_DENIED` |

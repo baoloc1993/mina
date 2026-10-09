@@ -131,6 +131,8 @@ export interface Host {
   ui: {
     toast(text: string): void;
     pickImage(opts: { multiple: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string }[] }>;
+    /** Host PHẢI loại tệp sai `mime` hoặc > MAX_FILE_BYTES bằng `INVALID_REQUEST` TRƯỚC khi lưu (không để file mồ côi). */
+    pickFile(opts: { mime: string[]; multiple: boolean }): Promise<{ files: { fileId: string; uri: string; mime: string; name: string; size: number }[] }>;
     share(s: { title: string; text: string; url: string | null }): Promise<void>;
   };
   intent: {

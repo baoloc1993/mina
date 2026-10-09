@@ -23,6 +23,7 @@ export const EXPECTED_SUMMARY: string[] = [
   'net.fetch|SCOPE_DENIED|OK|OK',
   'ui.toast|SCOPE_DENIED|OK|OK',
   'ui.pickImage|SCOPE_DENIED|OK|READ_ONLY',
+  'ui.pickFile|SCOPE_DENIED|OK|READ_ONLY',
   'ui.share|SCOPE_DENIED|OK|OK',
   'sync.status|OK|OK|OK',
   'auth.getAppToken|SCOPE_DENIED|OK|OK',

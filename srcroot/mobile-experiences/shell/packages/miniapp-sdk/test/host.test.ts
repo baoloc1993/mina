@@ -292,7 +292,7 @@ describe('file, notify, sync, chỉ đọc', () => {
     const r = rig('miniapp-hello');
     ok(await r.call('ui.toast', { text: 'xin chào' }));
     expect(r.notes).toContain('toast:xin chào');
-    expect(ok(await r.call('sdk.info'))).toMatchObject({ appId: 'vn.app.hello', version: expect.stringMatching(/^\d+\.\d+\.\d+$/), sdkVersion: '0.1.0', platform: 'mock-web', readOnly: false });
+    expect(ok(await r.call('sdk.info'))).toMatchObject({ appId: 'vn.app.hello', version: expect.stringMatching(/^\d+\.\d+\.\d+$/), sdkVersion: '0.1.1', platform: 'mock-web', readOnly: false });
     expect(ok(await r.call('auth.getAppToken')).token).toContain('vn.app.hello');
     // hello không khai notify.local
     expect((await r.call('notify.schedule', { id: 'x', at: 1, title: 'x' })).error?.code).toBe('SCOPE_DENIED');

@@ -1,4 +1,4 @@
-// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.0, ARCHITECTURE.md §5).
+// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.1, ARCHITECTURE.md §5).
 // THUẦN TS: shell và mock SDK trên trình duyệt chạy CÙNG mã này, mọi hiệu ứng đi qua `Host`.
 // Thứ tự kiểm (bất biến): request hợp lệ → method có thật → scope → chỉ đọc → tham số → thực thi.
 // Từ chối ở bước nào thì KHÔNG có tác dụng phụ (Host không được gọi lần nào) — bảng kỳ vọng `matrix.ts` canh điều này.
@@ -18,11 +18,22 @@ import {
 export * from './types';
 export { SqlRejected } from './sqlGuard';
 
-export const SDK_VERSION = '0.1.0';
+export const SDK_VERSION = '0.1.1';
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_INTENT_BYTES = 64 * 1024;
 export const MAX_NET_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_TOAST = 120;
+const MIME_FILTER = /^[A-Za-z0-9.+-]+\/([A-Za-z0-9.+-]+|\*)$/;
+
+/** Bộ lọc MIME của `ui.pickFile` (danh sách rỗng = nhận mọi loại; `image/*` khớp mọi `image/…`). Shell và mock dùng chung. */
+export function matchesMime(filter: string[], mime: string): boolean {
+  if (!filter.length) return true;
+  const m = mime.toLowerCase();
+  return filter.some((f) => {
+    const x = f.toLowerCase();
+    return x.endsWith('/*') ? m.startsWith(x.slice(0, -1)) : x === m;
+  });
+}
 
 const ERROR_CODES = new Set<ErrorCode>([
   'INVALID_REQUEST', 'SCOPE_DENIED', 'SQL_REJECTED', 'OFFLINE', 'INTERNAL', 'READ_ONLY', 'NOT_FOUND',
@@ -412,6 +423,22 @@ const METHODS: Record<string, MethodDef> = {
     scopes: ['ui.native', 'storage.files'],
     write: () => true,
     run: async (ctx, raw) => ctx.host.ui.pickImage({ multiple: raw.multiple === true }),
+  },
+  'ui.pickFile': {
+    // SDK 0.1.1 — thêm vào dòng 0.x ở mức patch (DECISIONS 2026-10-09) để range `^0.1` của app cũ vẫn chứa SDK.
+    scopes: ['ui.native', 'storage.files'],
+    write: () => true,
+    run: async (ctx, raw) => {
+      let mime: string[] = [];
+      if (raw.mime !== undefined && raw.mime !== null) {
+        if (!Array.isArray(raw.mime) || raw.mime.length > 10) bad('"mime" phải là mảng ≤ 10 chuỗi');
+        mime = (raw.mime as unknown[]).map((m) => {
+          if (typeof m !== 'string' || !MIME_FILTER.test(m)) bad('"mime" chứa loại không hợp lệ (vd "application/pdf", "image/*")');
+          return m as string;
+        });
+      }
+      return ctx.host.ui.pickFile({ mime, multiple: raw.multiple === true });
+    },
   },
   'ui.share': {
     scopes: ['ui.native'],

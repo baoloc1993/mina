@@ -3,11 +3,12 @@
 import { AppState, Platform, Share } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import * as FS from 'expo-file-system/legacy';
 import * as semver from 'semver';
 import type { PowerSyncDatabase } from '@powersync/react-native';
 import { config } from '../config';
-import { handleRpc, SDK_VERSION } from '../bridge/bridge';
+import { handleRpc, matchesMime, MAX_FILE_BYTES, SDK_VERSION } from '../bridge/bridge';
 import { BridgeError, type Host, type IntentOutcome, type RpcRequest, type SyncStatus } from '../bridge/types';
 import {
   claimsOf,
@@ -687,6 +688,29 @@ export class RuntimeImpl implements Runtime {
             const mime = a.mimeType ?? 'image/jpeg';
             const stored = await this.files.put(appId, { name: a.fileName ?? `anh-${Date.now()}.jpg`, mime, base64: a.base64 ?? '' });
             files.push({ fileId: stored.fileId, uri: stored.uri, mime });
+          }
+          return { files };
+        },
+        pickFile: async ({ mime, multiple }) => {
+          // SDK 0.1.1. Hộp chọn tệp hệ thống không cần quyền riêng; tệp được chép vào cache rồi vào FileStore như ảnh.
+          const r = await DocumentPicker.getDocumentAsync({ type: mime.length ? mime : '*/*', multiple, copyToCacheDirectory: true });
+          if (r.canceled) return { files: [] };
+          // Kiểm TẤT CẢ trước khi lưu tệp nào — tệp sai loại / quá lớn thì không để lại file mồ côi.
+          const checked: { uri: string; name: string; mime: string; size: number }[] = [];
+          for (const a of r.assets) {
+            const m = a.mimeType ?? 'application/octet-stream';
+            const info = await FS.getInfoAsync(a.uri);
+            const size = a.size ?? (info.exists ? info.size : 0);
+            if (!matchesMime(mime, m)) throw new BridgeError('INVALID_REQUEST', `Chỉ nhận tệp loại ${mime.join(', ')}`);
+            if (size > MAX_FILE_BYTES) throw new BridgeError('INVALID_REQUEST', 'Tệp quá 50 MB');
+            checked.push({ uri: a.uri, name: a.name, mime: m, size });
+          }
+          const files: { fileId: string; uri: string; mime: string; name: string; size: number }[] = [];
+          for (const c of checked) {
+            const base64 = await FS.readAsStringAsync(c.uri, { encoding: FS.EncodingType.Base64 });
+            const stored = await this.files.put(appId, { name: c.name, mime: c.mime, base64 });
+            files.push({ fileId: stored.fileId, uri: stored.uri, mime: c.mime, name: c.name, size: c.size });
+            await FS.deleteAsync(c.uri, { idempotent: true }).catch(() => undefined);
           }
           return { files };
         },

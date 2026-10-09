@@ -221,7 +221,7 @@ describe('sdk / auth', () => {
   });
   test('sdk.info báo readOnly', async () => {
     const { call } = setup([], {}, true);
-    expect((await call('sdk.info')).result).toMatchObject({ appId: 'vn.app.hello', sdkVersion: '0.1.0', readOnly: true });
+    expect((await call('sdk.info')).result).toMatchObject({ appId: 'vn.app.hello', sdkVersion: '0.1.1', readOnly: true });
   });
   test('auth.getAppToken dùng app_id của manifest, bỏ qua tham số app truyền', async () => {
     const { call, fake } = setup();
