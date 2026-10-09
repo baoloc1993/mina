@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p scripts",
     "accept": "node scripts/acceptance.ts",
     "accept:notes": "node scripts/accept-notes.ts",
-    "accept:calendar": "node scripts/accept-calendar.ts"
+    "accept:calendar": "node scripts/accept-calendar.ts",
+    "accept:news": "node scripts/accept-news.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

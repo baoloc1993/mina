@@ -8,6 +8,10 @@
   python deployment/local/seed/seed.py --calendar  # (vòng 5, dogfood đợt 2) thêm: cài Lịch cho cả 2 tenant + ~12 mục Lịch mẫu cho tenant-a
                                                 #   (srcroot/web-experiences/miniapp-calendar/scripts/seed-calendar.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
 
+  python deployment/local/seed/seed.py --news   # (vòng 6, dogfood đợt 2) thêm: cài Đọc báo cho cả 2 tenant + 4 nguồn / ~60 bài / 1 grant cho tenant-a
+                                                #   (srcroot/web-experiences/miniapp-news/scripts/seed-news.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
+                                                #   Feed giả cho emulator: python deployment/local/rss/serve.py (cổng 8787, emulator tới qua 10.0.2.2).
+
 Registry sau seed (vòng 3): hello (bản trong fixtures/miniapp-hello, published, cài cho cả 2 tenant) · hello-cal 0.1.0 (published,
 KHÔNG cài sẵn — cài từ launcher) · vn.app.private-a 0.0.1 (riêng của tenant-a, cài cho tenant-a) · hello 0.5.0 DRAFT có migration
 cố ý lỗi trên SQLite (fixtures/miniapp-hello-bad-migration, tenant-a là tester) · vài core_tags cho tenant-a. Chạy lại an toàn:
@@ -32,6 +36,9 @@ NOTE_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-note")
 NOTE_DIST = os.path.join(NOTE_APP, "dist")
 CAL_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-calendar")
 CAL_DIST = os.path.join(CAL_APP, "dist")
+NEWS_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-news")
+NEWS_DIST = os.path.join(NEWS_APP, "dist")
+NEWS_CONFIG = os.path.join(ROOT, "deployment", "local", "seed", "configs", "vn.app.news.json")
 BUILD = os.path.join(ROOT, "deployment", "local", ".build")
 SYNC_RULES = os.path.join(BACKEND, "powersync", "sync-rules.yaml")
 DB_CONTAINER = "supabase_db_platform-backend"
@@ -202,6 +209,24 @@ def seed_calendar(tenants: dict) -> None:
     print(f"  {USERS[0]}: cài vn.app.calendar + {gen.stderr.strip()} (tenant-b: chỉ cài, chưa có mục)")
 
 
+def seed_news(tenants: dict) -> None:
+    """Dogfood đợt 2: cài Đọc báo cho cả 2 tenant + dữ liệu mẫu cho tenant-a. Chạy sau khi sync rules đã có bucket của Đọc báo."""
+    if not sql("select 1 from app_versions where app_id = 'vn.app.news' limit 1"):
+        print("  CẢNH BÁO: Đọc báo (vn.app.news) chưa publish — bỏ qua dữ liệu mẫu")
+        return
+    for e, tid in tenants.items():
+        if not sql(f"select 1 from installations where tenant_id = '{tid}' and app_id = 'vn.app.news' and enabled"):
+            sql(f"select public._install_app('{tid}', 'vn.app.news')")
+    ta = tenants[USERS[0]]
+    gen = subprocess.run(["node", os.path.join("scripts", "seed-news.mjs"), ta], cwd=NEWS_APP, capture_output=True, text=True, encoding="utf-8")
+    if gen.returncode != 0:
+        sys.exit(f"sinh dữ liệu Đọc báo lỗi: {gen.stderr.strip()}")
+    r = subprocess.run(["docker", "exec", "-i", DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q"], input=gen.stdout, capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        sys.exit(f"nạp Đọc báo mẫu lỗi: {r.stderr.strip()}")
+    print(f"  {USERS[0]}: cài vn.app.news + {gen.stderr.strip()} (tenant-b: chỉ cài)")
+
+
 def seed_notes(tenants: dict) -> None:
     """Dogfood đợt 2: cài Ghi chú cho cả 2 tenant + ghi chú mẫu. Chạy sau khi sync rules đã có bucket của Ghi chú."""
     for e, tid in tenants.items():
@@ -233,9 +258,16 @@ def seed() -> None:
         publish_fixture(cal_dir, "Lịch (vn.app.calendar, srcroot/web-experiences/miniapp-calendar/dist)")
     else:
         print("  CẢNH BÁO: chưa có srcroot/web-experiences/miniapp-calendar/dist (gói Lịch chưa dựng) — bỏ qua publish Lịch")
-    # Trần độ dài / giá trị hợp lệ của bảng Ghi chú + Lịch ở server (migration 20261009000003/4) — chạy lại sau publish dựng bảng
+    # Đọc báo (vn.app.news, vòng 6) + cấu hình nguồn gợi ý từ server (registry set-config — không cần phát hành app)
+    news_dir = build_web_app(NEWS_APP, NEWS_DIST, "Đọc báo")
+    if news_dir:
+        publish_fixture(news_dir, "Đọc báo (vn.app.news, srcroot/web-experiences/miniapp-news/dist)")
+        registry("set-config", "vn.app.news", NEWS_CONFIG)
+        print("  set-config vn.app.news (8 báo gợi ý + network)")
+    # Trần độ dài / giá trị hợp lệ của bảng Ghi chú + Lịch + Đọc báo ở server (migration 20261009000003/4/6) — chạy lại sau publish dựng bảng
     sql("select public.ensure_note_limits()")
     sql("select public.ensure_calendar_limits()")
+    sql("select public.ensure_news_limits()")
 
     tenants = {}
     for i, e in enumerate(USERS):
@@ -296,6 +328,8 @@ def seed() -> None:
         seed_notes(tenants)
     if "--calendar" in sys.argv:
         seed_calendar(tenants)
+    if "--news" in sys.argv:
+        seed_news(tenants)
 
 
 if __name__ == "__main__":

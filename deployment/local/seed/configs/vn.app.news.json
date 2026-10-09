@@ -1,0 +1,22 @@
+{
+  "network": [
+    "vnexpress.net",
+    "tuoitre.vn",
+    "thanhnien.vn",
+    "dantri.com.vn",
+    "vietnamnet.vn",
+    "nhandan.vn",
+    "www.sggp.org.vn",
+    "tinhte.vn"
+  ],
+  "sources": [
+    { "key": "vnexpress", "name": "VnExpress", "feed_url": "https://vnexpress.net/rss/tin-moi-nhat.rss", "host": "vnexpress.net" },
+    { "key": "tuoitre", "name": "Tuổi Trẻ", "feed_url": "https://tuoitre.vn/home.rss", "host": "tuoitre.vn" },
+    { "key": "thanhnien", "name": "Thanh Niên", "feed_url": "https://thanhnien.vn/rss/home.rss", "host": "thanhnien.vn" },
+    { "key": "dantri", "name": "Dân Trí", "feed_url": "https://dantri.com.vn/rss/home.rss", "host": "dantri.com.vn" },
+    { "key": "vietnamnet", "name": "VietnamNet", "feed_url": "https://vietnamnet.vn/thoi-su.rss", "host": "vietnamnet.vn" },
+    { "key": "nhandan", "name": "Nhân Dân", "feed_url": "https://nhandan.vn/rss/home.rss", "host": "nhandan.vn" },
+    { "key": "sggp", "name": "Sài Gòn Giải Phóng", "feed_url": "https://www.sggp.org.vn/rss/home.rss", "host": "www.sggp.org.vn" },
+    { "key": "tinhte", "name": "Tinh tế", "feed_url": "https://tinhte.vn/rss", "host": "tinhte.vn" }
+  ]
+}

@@ -12,7 +12,7 @@ export default defineConfig({
     mockPlugin({
       fixturesRoot: process.env.MOCK_FIXTURES_ROOT || join(shellRoot, 'fixtures'),
       defaultDir: process.env.MOCK_FIXTURE_DIR || null,
-      configDir: process.env.MOCK_CONFIG_DIR || join(here, 'config'),
+      configDir: process.env.MOCK_CONFIG_DIR || join(shellRoot, '../../../deployment/local/seed/configs'),
     }),
   ],
   // Mock chạy chính mã bridge của shell (shell/src/bridge) — cho phép đọc ra ngoài root.

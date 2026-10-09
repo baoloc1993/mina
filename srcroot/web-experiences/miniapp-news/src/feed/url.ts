@@ -38,3 +38,8 @@ export function safeHttpUrl(raw: string | null | undefined): string | null {
     return null;
   }
 }
+
+/** Host đúng khuôn của `network[]` / `net.requestAccess` (chữ thường, không wildcard/scheme/path, cổng tuỳ chọn). */
+export function isFeedHost(h: unknown): h is string {
+  return typeof h === 'string' && h.length > 0 && h.length <= 253 && HOST_RE.test(h);
+}

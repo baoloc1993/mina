@@ -36,6 +36,11 @@ bucket_definitions:
     parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.hello-cal' and enabled = true
     data:
       - select * from app_vn_app_hello_cal_reminders where tenant_id = bucket.tenant_id
+  app_vn_app_news:
+    parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.news' and enabled = true
+    data:
+      - select * from app_vn_app_news_items where tenant_id = bucket.tenant_id
+      - select * from app_vn_app_news_sources where tenant_id = bucket.tenant_id
   app_vn_app_note:
     parameters: select tenant_id from installations where tenant_id = request.jwt() ->> 'tenant_id' and app_id = 'vn.app.note' and enabled = true
     data:
