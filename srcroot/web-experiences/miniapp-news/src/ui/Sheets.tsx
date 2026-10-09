@@ -40,7 +40,9 @@ export function AddSheet({
                     <span className="sub">{s.host}</span>
                   </div>
                   {added ? (
-                    <span className="muted">Đã thêm</span>
+                    <button className="btn slim added" disabled aria-label={`Đã thêm ${s.name}`}>
+                      Đã thêm
+                    </button>
                   ) : (
                     <button className={`btn slim sec${busyKey === s.key ? ' busy' : ''}`} disabled={busy || readOnly || full} onClick={() => onAddSuggestion(s)} aria-label={`Thêm ${s.name}`}>
                       {busyKey === s.key ? 'Đang thêm…' : 'Thêm'}
@@ -67,6 +69,7 @@ export function AddSheet({
           placeholder="https://blog.example.com/rss.xml"
           value={url}
           disabled={busy || readOnly}
+          onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el.scrollIntoView({ block: 'center' }), 350); }}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && url.trim() && !busy && onAddUrl(url)}
         />
@@ -92,7 +95,7 @@ export function AddSheet({
 
 // ---------------------------------------------------------------- S23
 export function ItemSheet({
-  item, sourceName, readOnly, busy, noteMissing, calendarMissing, now, onOpen, onToggleSaved, onNote, onRemind, onToggleRead, onClose,
+  item, sourceName, readOnly, busy, noteMissing, calendarMissing, remindedAt, now, onOpen, onToggleSaved, onNote, onRemind, onToggleRead, onClose,
 }: {
   item: ItemRow;
   sourceName: string;
@@ -100,6 +103,7 @@ export function ItemSheet({
   busy: 'note' | 'remind' | null;
   noteMissing: boolean;
   calendarMissing: boolean;
+  remindedAt: string | null;
   now: number;
   onOpen: () => void;
   onToggleSaved: () => void;
@@ -133,7 +137,7 @@ export function ItemSheet({
       </button>
       {remind && (
         <>
-          <div className="quick">
+          <div className="quick" ref={(el) => el?.scrollIntoView({ block: 'nearest' })}>
             {quickTimes(now).map((q) => (
               <button key={q.key} className="btn sec slim" disabled={readOnly || busy === 'remind'} onClick={() => onRemind(q.at)} title={q.text}>
                 {q.label}
@@ -142,6 +146,11 @@ export function ItemSheet({
           </div>
           <div className="muted">Bài sẽ tự được lưu Đọc sau để mở được cả khi mất mạng.</div>
         </>
+      )}
+      {remindedAt && (
+        <div className="banner info" role="status">
+          <span>Đã đặt nhắc lúc {remindedAt.slice(11, 16)} ngày {remindedAt.slice(8, 10)}/{remindedAt.slice(5, 7)} — xem trong Lịch. Bài đã nằm ở Đọc sau.</span>
+        </div>
       )}
       {calendarMissing && <div className="warntxt" role="alert">Chưa cài Lịch — mở Catalog để cài (INTENT_NO_HANDLER)</div>}
       <button className="lnk" disabled={readOnly} onClick={onToggleRead}>
@@ -158,11 +167,12 @@ export function ItemSheet({
 
 // ---------------------------------------------------------------- sheet nguồn
 export function SourceSheet({
-  group, readOnly, busy, onRename, onRetry, onAllow, onClose,
+  group, readOnly, busy, allowBusy, onRename, onRetry, onAllow, onClose,
 }: {
   group: SourceGroup;
   readOnly: boolean;
   busy: boolean;
+  allowBusy: boolean;
   onRename: (name: string) => void;
   onRetry: () => void;
   onAllow: () => void;
@@ -191,8 +201,8 @@ export function SourceSheet({
         Lưu tên
       </button>
       {blocked ? (
-        <button className="btn sec" disabled={busy} onClick={onAllow}>
-          Cho phép truy cập {src.host}
+        <button className={`btn sec${allowBusy || busy ? ' busy' : ''}`} disabled={busy || allowBusy} onClick={onAllow}>
+          {allowBusy || busy ? 'Đang xử lý…' : `Cho phép truy cập ${src.host}`}
         </button>
       ) : (
         <button className={`btn sec${busy ? ' busy' : ''}`} disabled={busy || readOnly} onClick={onRetry}>

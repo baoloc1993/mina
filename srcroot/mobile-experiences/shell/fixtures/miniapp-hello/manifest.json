@@ -1,12 +1,12 @@
 {
   "id": "vn.app.hello",
   "name": "Hello",
-  "version": "0.6.1",
+  "version": "0.8.0",
   "sdk": "^0.1",
   "entry": "index.html",
   "icon": "icon.png",
   "description": "App mẫu: ghi chú nhanh, tag dùng chung, gửi nhắc sang Hello Lịch và gửi vào Ghi chú.",
-  "scopes": ["db.own", "core.tags:write", "intent.send", "net", "ui.native", "storage.files", "auth.token"],
+  "scopes": ["db.own", "core.tags:write", "intent.send", "net", "net.user-approved", "ui.native", "storage.files", "auth.token"],
   "tables": ["items", "drafts"],
   "intents": {
     "sends": [

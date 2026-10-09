@@ -381,6 +381,13 @@ describe('AC-4 intent', () => {
     expect(m.intents.map((i) => [i.type, (i.payload as { id: string }).id])).toEqual([['note.create', id], ['note.create', id]]);
     expect(m.intents[0].payload).toMatchObject({ title: 'Tiêu đề bài một', url: 'https://blog.example.dev/x' });
   });
+  test('"Đã lưu thành note · Mở": manifest khai sends note.open → shell giao mode open cho Ghi chú (lỗi SCOPE_DENIED ở bản 0.1.2)', async () => {
+    const { m } = await one();
+    expect(await m.sdk.intent.send('note.open', { noteId: '123e4567-e89b-42d3-a456-426614174000' }, { mode: 'open' })).toEqual({ status: 'opened' });
+    expect(m.intents.at(-1)).toMatchObject({ type: 'note.open', mode: 'open', to: 'vn.app.note' });
+    m.installed.note = false;
+    expect(errCode(await m.sdk.intent.send('note.open', { noteId: '123e4567-e89b-42d3-a456-426614174000' }, { mode: 'open' }).catch((x: unknown) => x))).toBe('INTENT_NO_HANDLER');
+  });
   test('tiêu đề 300 ký tự cắt còn 200; không tóm tắt thì bỏ body', async () => {
     const p = noteCreatePayload({ title: 't'.repeat(300), summary: '  ', link: 'https://a.vn/x' }, '123e4567-e89b-42d3-a456-426614174000');
     expect(p.title).toHaveLength(200);

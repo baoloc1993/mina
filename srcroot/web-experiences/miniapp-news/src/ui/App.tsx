@@ -54,7 +54,15 @@ export function App({ sdk }: { sdk: Sdk }) {
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
   const refreshingRef = useRef(false);
+  const syncOfflineRef = useRef(false);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const openingRef = useRef<string | null>(null);
+  openingRef.current = openingId;
+  const sheetRef = useRef<Sheet>(null);
+  const [allowBusy, setAllowBusy] = useState(false);
+  const [remindedAt, setRemindedAt] = useState<string | null>(null);
 
+  sheetRef.current = sheet;
   const showToast = useCallback((t: ToastState) => setToast(t), []);
   const closeToast = useCallback(() => setToast(null), []);
   const fail = useCallback((e: unknown) => showToast({ msg: friendly(e), err: true }), [showToast]);
@@ -62,13 +70,22 @@ export function App({ sdk }: { sdk: Sdk }) {
   const groups: SourceGroup[] = useMemo(() => groupSources(snap.sources), [snap.sources]);
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
+  const doRefreshRef = useRef<(auto?: boolean) => Promise<void>>(async () => undefined);
 
   // ---- nạp dữ liệu local (không đụng mạng) ----
   const reload = useCallback(async () => {
     try {
       const [sources, items, saved, names, info, st] = await Promise.all([listSources(sdk), listItems(sdk), listSaved(sdk), listSourceNames(sdk), sdk.sdk.info(), sdk.sync.status()]);
       setReadOnly(info.readOnly);
-      setSyncOffline(st.state === 'offline');
+      const nowOffline = st.state === 'offline';
+      const wasOffline = syncOfflineRef.current;
+      syncOfflineRef.current = nowOffline;
+      setSyncOffline(nowOffline);
+      if (wasOffline && !nowOffline) {
+        // Có mạng lại: bỏ banner offline và tự làm mới một lần (không chờ người dùng bấm).
+        setFetchOffline(false);
+        setTimeout(() => void doRefreshRef.current(true), 500);
+      }
       const cfg = (info.config ?? {}) as Record<string, unknown>;
       setConfig((prev) => (JSON.stringify(prev) === JSON.stringify(cfg) ? prev : cfg));
       const s = JSON.stringify([sources, items, saved, [...names]]);
@@ -96,12 +113,13 @@ export function App({ sdk }: { sdk: Sdk }) {
       setRefreshing(true);
       setBusyIds(new Set(gs.map((g) => g.main.id)));
       try {
-        const out = await refreshAll(sdk, gs, Date.now(), (o) => setBusyIds((prev) => (prev.has(o.id) ? new Set([...prev].filter((x) => x !== o.id)) : prev)));
+        const out = await refreshAll(sdk, gs, Date.now(), (o) => setBusyIds((prev) => (prev.has(o.id) ? new Set([...prev].filter((x) => x !== o.id)) : prev)), () => syncOfflineRef.current);
         const offlineAll = out.length > 0 && out.every((o) => o.error?.code === 'OFFLINE');
+        const offlineSome = out.some((o) => o.error?.code === 'OFFLINE');
         setFetchOffline(offlineAll);
         await reload();
         if (!auto) {
-          if (offlineAll) showToast({ msg: 'Đang offline — hiện bài đã tải' });
+          if (offlineAll || (offlineSome && syncOfflineRef.current)) showToast({ msg: 'Đang offline — hiện bài đã tải' });
           else {
             const bad = out.filter((o) => !o.ok).length;
             showToast(bad ? { msg: `${bad} nguồn không tải được — xem ở Nguồn`, err: true, label: 'Xem', run: () => setTab('sources') } : { msg: 'Đã cập nhật' });
@@ -115,6 +133,7 @@ export function App({ sdk }: { sdk: Sdk }) {
     },
     [sdk, reload, showToast],
   );
+  doRefreshRef.current = doRefresh;
 
   // ---- khởi động: nạp → dọn 30 ngày → báo ready → tự làm mới một lần ----
   useEffect(() => {
@@ -156,6 +175,10 @@ export function App({ sdk }: { sdk: Sdk }) {
   // ---- mở bài ----
   const openItem = useCallback(
     async (item: ItemRow) => {
+      if (openingRef.current) return; // đang mở một bài: bỏ qua chạm thứ hai (không đánh dấu đã đọc bài chưa mở)
+      openingRef.current = item.id;
+      setOpeningId((cur) => cur ?? item.id); // phản hồi tức thì: Chrome Custom Tabs mất 3–5 giây mới bật
+      setTimeout(() => setOpeningId((cur) => (cur === item.id ? null : cur)), 6000);
       try {
         await sdk.ui.openUrl(item.link);
         if (!readOnlyRef.current && item.read_at_ms === null) {
@@ -164,6 +187,8 @@ export function App({ sdk }: { sdk: Sdk }) {
         }
       } catch (e) {
         fail(e);
+      } finally {
+        setTimeout(() => setOpeningId(null), 800);
       }
     },
     [sdk, reload, fail],
@@ -211,9 +236,7 @@ export function App({ sdk }: { sdk: Sdk }) {
       try {
         const r = await addSource(sdk, raw, { groups: groupsRef.current, now: Date.now(), ...opt });
         if (r.status === 'exists') {
-          showToast({ msg: 'Đã có nguồn này' });
-          setFilter(r.source.id);
-          setTab('news');
+          showToast({ msg: `Đã có nguồn này: ${r.source.name}` });
           setSheet(null);
         } else {
           showToast({ msg: `Đã thêm ${r.source.name} · tên sửa được ở Nguồn` });
@@ -221,7 +244,10 @@ export function App({ sdk }: { sdk: Sdk }) {
         }
         await reload();
       } catch (e) {
-        setAddErr(toAppError(e, ''));
+        const ae = toAppError(e, '');
+        setAddErr(ae);
+        // Sheet đã đóng trong lúc đang tải (người dùng vội): báo kết quả bằng toast
+        if (sheetRef.current?.k !== 'add') showToast({ msg: `${ae.message} (${ae.code})`, err: true });
       } finally {
         setAddBusy(null);
       }
@@ -267,15 +293,21 @@ export function App({ sdk }: { sdk: Sdk }) {
   };
 
   const allowAgain = async (g: SourceGroup) => {
+    if (allowBusy) return;
+    setAllowBusy(true);
     try {
       const r = await sdk.net.requestAccess({ host: g.main.host, reason: `Để tải tin từ ${g.main.host}` });
       if (!r.granted) {
         showToast({ msg: `Chưa cho phép truy cập ${g.main.host} (NET_BLOCKED)`, err: true });
         return;
       }
-      await retrySource(g);
+      // Quyền theo host: tải lại MỌI nguồn cùng host đang báo NET_BLOCKED, không chỉ nguồn vừa chạm.
+      const same = groupsRef.current.filter((x) => x.main.host === g.main.host && (x.main.id === g.main.id || errorOf(x.main)?.code === 'NET_BLOCKED'));
+      for (const x of same) await retrySource(x);
     } catch (e) {
       fail(e);
+    } finally {
+      setAllowBusy(false);
     }
   };
 
@@ -335,6 +367,7 @@ export function App({ sdk }: { sdk: Sdk }) {
     try {
       await sdk.intent.send('calendar.reminder.create', reminderPayload(item, newId(), at), { mode: 'create' });
       if (item.saved_at_ms === null) await setSaved(sdk, item.id, Date.now()); // bài phải có mặt offline khi đến giờ nhắc
+      setRemindedAt(at);
       await reload();
     } catch (e) {
       if (errCode(e) === 'INTENT_NO_HANDLER') setCalendarMissing(true);
@@ -359,18 +392,20 @@ export function App({ sdk }: { sdk: Sdk }) {
     const s = info(it);
     return (
       <div key={it.id} id={`art-${it.id}`} className={`arow${it.read_at_ms !== null ? ' read' : ''}${highlight === it.id ? ' hl' : ''}`}>
-        <button className="mid" onClick={() => void openItem(it)} aria-label={`Mở bài: ${it.title}`}>
+        <button className="mid" disabled={openingId === it.id} onClick={() => void openItem(it)} aria-label={`Mở bài: ${it.title}`}>
           <span className="ttl">{it.title}</span>
           <span className="sub">
             <span>{s.name}{s.removed ? ' · nguồn đã bỏ' : ''}</span>
-            <span>· {relTime(it.published_at_ms ?? it.fetched_at_ms, now)}</span>
+            <span>{openingId === it.id ? 'Đang mở…' : relTime(it.published_at_ms ?? it.fetched_at_ms, now)}</span>
+            {it.read_at_ms !== null && <span className="read-tag">Đã đọc</span>}
             {it.note_id && <span className="tagchip mini">Note</span>}
           </span>
           {it.summary && <span className="sum">{it.summary}</span>}
         </button>
         <div className="acts">
           <button className={`ab${it.saved_at_ms !== null ? ' on' : ''}`} disabled={readOnly} aria-pressed={it.saved_at_ms !== null} aria-label={it.saved_at_ms !== null ? 'Bỏ lưu đọc sau' : 'Đọc sau'} onClick={() => void toggleSaved(it)}>
-            {it.saved_at_ms !== null ? '★' : '☆'}
+            <span aria-hidden="true">{it.saved_at_ms !== null ? '★' : '☆'}</span>
+            <span className="ablbl" aria-hidden="true">{it.saved_at_ms !== null ? 'Đã lưu' : 'Đọc sau'}</span>
           </button>
           <button className="ab" aria-label="Thêm hành động" onClick={() => setSheet({ k: 'item', id: it.id })}>
             ⋯
@@ -395,7 +430,7 @@ export function App({ sdk }: { sdk: Sdk }) {
         <>
           <div className="bar">
             <div className="title">Tin mới</div>
-            <button className="iconbtn txt" disabled={refreshing || readOnly || groups.length === 0} onClick={() => void doRefresh()}>
+            <button className={`iconbtn txt${refreshing ? ' busy' : ''}`} disabled={refreshing || readOnly || groups.length === 0} onClick={() => void doRefresh()}>
               {refreshing ? <><span className="spin" aria-hidden="true" /> Đang tải…</> : 'Làm mới'}
             </button>
           </div>
@@ -419,7 +454,7 @@ export function App({ sdk }: { sdk: Sdk }) {
                   </div>
                 )}
                 {readOnly && <Banner tone="warn">Chỉ đọc — không tải bài mới (READ_ONLY). Đọc bài đã có vẫn được.</Banner>}
-                {offline && <Banner tone="info">Đang offline — hiện bài đã tải{updated ? ` lúc ${hhmm(updated)}` : ''}</Banner>}
+                {offline && <Banner tone="warn">Đang offline — hiện bài đã tải{updated ? ` lúc ${hhmm(updated)}` : ''}</Banner>}
                 {failing > 0 && <Banner tone="warn" action={{ label: 'Xem', run: () => setTab('sources') }}>{failing} nguồn không tải được — xem ở Nguồn</Banner>}
                 {updated && <div className="updated">Cập nhật lần cuối {hhmm(updated)}{refreshing ? ' · đang tải…' : ''}</div>}
                 {newsItems.length === 0 ? (
@@ -456,7 +491,7 @@ export function App({ sdk }: { sdk: Sdk }) {
             ) : (
               <>
                 <div className="muted">Bài bạn lưu — chỉ tiêu đề, tóm tắt và liên kết. Không bao giờ bị dọn.</div>
-                {offline && <Banner tone="info">Đang offline — xem được tiêu đề và tóm tắt; mở bài cần mạng</Banner>}
+                {offline && <Banner tone="warn">Đang offline — xem được tiêu đề và tóm tắt; mở bài cần mạng</Banner>}
                 {snap.saved.length === 0 ? <Empty glyph="☆">Chưa lưu bài nào — bấm ☆ Đọc sau ở một bài</Empty> : <div className="list">{snap.saved.map(row)}</div>}
               </>
             )}
@@ -516,7 +551,7 @@ export function App({ sdk }: { sdk: Sdk }) {
     <div className="screen">
       {body}
       <nav className="tabs" aria-label="Chuyển màn">
-        {([['news', '▤', 'Tin mới'], ['later', '☆', `Đọc sau${snap.saved.length ? ` · ${snap.saved.length}` : ''}`], ['sources', '◎', 'Nguồn']] as const).map(([k, ic, label]) => (
+        {([['news', '▤', 'Tin mới'], ['later', '☆', `Đọc sau${snap.saved.length ? ` (${snap.saved.length})` : ''}`], ['sources', '◎', 'Nguồn']] as const).map(([k, ic, label]) => (
           <button key={k} className={tab === k && !notFound ? 'on' : ''} aria-current={tab === k && !notFound ? 'page' : undefined} onClick={() => { setNotFound(false); setTab(k); }}>
             <span className="ic" aria-hidden="true">{ic}</span>
             {label}
@@ -533,7 +568,7 @@ export function App({ sdk }: { sdk: Sdk }) {
           error={addErr}
           onAddSuggestion={(s) => void doAdd(s.feed_url, { name: s.name, suggestedKey: s.key })}
           onAddUrl={(raw) => void doAdd(raw)}
-          onClose={() => !addBusy && setSheet(null)}
+          onClose={() => setSheet(null)}
         />
       )}
       {sheet?.k === 'item' && sheetItem && (
@@ -544,13 +579,14 @@ export function App({ sdk }: { sdk: Sdk }) {
           busy={itemBusy}
           noteMissing={noteMissing}
           calendarMissing={calendarMissing}
+          remindedAt={remindedAt}
           now={now}
           onOpen={() => void openItem(sheetItem)}
           onToggleSaved={() => void toggleSaved(sheetItem)}
           onNote={() => void doNote(sheetItem)}
           onRemind={(at) => void doRemind(sheetItem, at)}
           onToggleRead={() => void toggleRead(sheetItem)}
-          onClose={() => { setNoteMissing(false); setCalendarMissing(false); setSheet(null); }}
+          onClose={() => { setNoteMissing(false); setCalendarMissing(false); setRemindedAt(null); setSheet(null); }}
         />
       )}
       {sheet?.k === 'source' && sheetSource && (
@@ -559,6 +595,7 @@ export function App({ sdk }: { sdk: Sdk }) {
           group={sheetSource}
           readOnly={readOnly}
           busy={busyIds.has(sheetSource.main.id)}
+          allowBusy={allowBusy}
           onRename={(name) => void (async () => { try { await renameSource(sdk, sheetSource.ids, name); await reload(); setSheet(null); } catch (e) { fail(e); } })()}
           onRetry={() => void retrySource(sheetSource)}
           onAllow={() => void allowAgain(sheetSource)}

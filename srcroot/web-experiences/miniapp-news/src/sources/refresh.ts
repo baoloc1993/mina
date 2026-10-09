@@ -121,14 +121,16 @@ export interface RefreshOutcome {
 }
 
 /** Làm mới một nguồn: lỗi mạng (OFFLINE) KHÔNG ghi DB (giữ danh sách + lần cập nhật cuối); lỗi khác ghi `last_error` của nguồn đó. */
-export async function refreshSource(sdk: Sdk, group: SourceGroup, now: number): Promise<RefreshOutcome> {
+export async function refreshSource(sdk: Sdk, group: SourceGroup, now: number, isOffline: () => boolean = () => false): Promise<RefreshOutcome> {
   const src = group.main;
   try {
     const feed = await download(sdk, src.feed_url, src.host, now);
     const r = await upsertItems(sdk, src, feed.items, now);
     return { id: src.id, ok: true, added: r.added };
   } catch (e) {
-    const err = toAppError(e, src.host);
+    let err = toAppError(e, src.host);
+    // Mất mạng thật: native fetch có thể treo tới hết giờ (NET_ERROR "Hết thời gian chờ") thay vì OFFLINE — shell đã báo offline thì coi là OFFLINE.
+    if (err.code === 'NET_ERROR' && isOffline()) err = new AppError('OFFLINE', 'Không có mạng — kết nối rồi thử lại');
     if (err.code !== 'OFFLINE' && err.code !== 'READ_ONLY') {
       await markSourceError(sdk, src.id, packError(err), src.last_error).catch(() => undefined);
     }
@@ -137,14 +139,14 @@ export async function refreshSource(sdk: Sdk, group: SourceGroup, now: number): 
 }
 
 /** Tải mọi nguồn song song (tối đa 4 cùng lúc); nguồn lỗi không chặn nguồn khác. */
-export async function refreshAll(sdk: Sdk, groups: SourceGroup[], now: number, onEach?: (o: RefreshOutcome) => void): Promise<RefreshOutcome[]> {
+export async function refreshAll(sdk: Sdk, groups: SourceGroup[], now: number, onEach?: (o: RefreshOutcome) => void, isOffline?: () => boolean): Promise<RefreshOutcome[]> {
   const out: RefreshOutcome[] = [];
   let next = 0;
   const worker = async () => {
     for (;;) {
       const i = next++;
       if (i >= groups.length) return;
-      const o = await refreshSource(sdk, groups[i], now);
+      const o = await refreshSource(sdk, groups[i], now, isOffline);
       out.push(o);
       onEach?.(o);
     }

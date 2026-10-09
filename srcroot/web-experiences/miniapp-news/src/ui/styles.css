@@ -168,3 +168,39 @@ button.tagchip::after { content: ""; position: absolute; left: 0; right: 0; top:
 .btn.slim.sec { width: auto; }
 .empty .btn { width: auto; }
 .skel div { height: 88px; }
+
+/* Không chọn chữ khi chạm lâu (thanh Copy/Share của Chrome nổi che nội dung) — chỉ ô nhập được chọn */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input { -webkit-user-select: text; user-select: text; }
+.arow.opening, .arow .mid:disabled { opacity: .7; }
+
+.sheet-head { display: flex; align-items: flex-start; gap: var(--space-sm); position: sticky; top: calc(var(--space-md) * -1); background: var(--color-bg); z-index: 1; margin: calc(var(--space-md) * -1) calc(var(--space-md) * -1) 0; padding: var(--space-md) var(--space-sm) var(--space-sm) var(--space-md); }
+.sheet-head h3 { flex: 1; min-width: 0; }
+.arow .read-tag { color: var(--color-text-muted); }
+
+/* Dogfood picky (vòng 6): bỏ màu tap-highlight mặc định của WebView (màu ngoài token) */
+* { -webkit-tap-highlight-color: transparent; }
+/* C1: "đang xử lý" tách khỏi "tắt" — đang xử lý giữ nguyên độ đậm chữ, chỉ khoá bấm */
+.btn.busy[disabled], .iconbtn.busy[disabled] { opacity: 1; }
+.iconbtn.busy { color: var(--color-primary); }
+/* C29: nút Đọc sau = biểu tượng + chữ */
+.arow .ab { flex-direction: column; gap: 0; min-width: 64px; font-size: var(--text-lg); line-height: 1.1; }
+.arow .ab .ablbl { font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+.arow .sub > span { white-space: nowrap; }
+.arow .sub > span:first-child { white-space: normal; }
+.tagchip.mini { font-weight: 600; color: var(--color-text); }
+/* C18 chip lọc nguồn đạt vùng chạm tối thiểu; nhịp theo token */
+.chips .tagchip { min-height: var(--tap-min); }
+.srow .mid { gap: var(--space-xs); }
+.tabs button { gap: var(--space-xs); }
+/* C30: đang tải = chấm primary XOAY */
+.srow .st.busy { background: transparent; border: 2px solid var(--color-primary); border-top-color: transparent; animation: spin 1s linear infinite; }
+/* C30: "Đã thêm" là nút tắt */
+.btn.slim.added { background: var(--color-surface); color: var(--color-text-muted); border: 1px solid var(--color-border); opacity: 1; }
+
+/* Dogfood mobile (vòng 6): không để dấu · đứng đầu dòng; nhãn tab một dòng; hàng nguồn không đè chữ dưới nút */
+.arow .sub { column-gap: var(--space-xs); }
+.arow .sub > span:not(:last-child)::after { content: ' ·'; }
+.tabs button { white-space: nowrap; }
+.srow .sub { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
+.srow .mid { min-width: 0; }

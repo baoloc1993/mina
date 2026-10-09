@@ -102,6 +102,9 @@
 <div class="group">
   <button id="n-ok">Gọi vnexpress.net</button>
   <button id="n-bad">Gọi domain lạ</button>
+  <button id="n-grant">Xin quyền example.org</button>
+  <button id="n-open">Mở trang web (ui.openUrl)</button>
+  <button id="n-config">Xem cấu hình app (info().config)</button>
 </div>
 
 <h2>Native</h2>
@@ -268,6 +271,10 @@
     show('vnexpress.net', m.net.fetch('https://vnexpress.net/').then(function (r) { return { status: r.status, bytes: r.body.length }; }));
   };
   $('n-bad').onclick = function () { show('domain lạ', m.net.fetch('https://example.org/')); };
+  // SDK 0.1.2: xin quyền host (hộp thoại hệ thống), trình duyệt trong app, cấu hình app từ server
+  $('n-grant').onclick = function () { show('xin quyền example.org', m.net.requestAccess({ host: 'example.org', reason: 'Để thử hộp thoại xin quyền' })); };
+  $('n-open').onclick = function () { show('mở trang web', m.ui.openUrl('https://example.org/')); };
+  $('n-config').onclick = function () { show('info().config', m.sdk.info().then(function (i) { return i.config; })); };
 
   // ---------- native ----------
   $('u-photo').onclick = function () {

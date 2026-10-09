@@ -111,7 +111,12 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   return (
     <div className="scrim" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sheet">
-        <h3>{title}</h3>
+        <div className="sheet-head">
+          <h3>{title}</h3>
+          <button className="iconbtn" aria-label="Đóng" onClick={onClose}>
+            ✕
+          </button>
+        </div>
         {children}
       </div>
     </div>

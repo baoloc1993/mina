@@ -539,6 +539,7 @@ export class RuntimeImpl implements Runtime {
 
   private openAppInner = async (appId: string): Promise<void> => {
     const alreadyLive = this.live.live.includes(appId);
+    if (alreadyLive && this.s.online && this.s.session) void this.refreshCatalog(); // cấu hình mới (sự kiện `config`) tới app đang sống
     if (!alreadyLive) {
       // Biết bản mới / bị thu hồi TRƯỚC khi nạp (đừng chờ quá 2,5 s).
       // App đang bị thu hồi: có thể đã có bản an toàn mới — chờ tải xong (≤ 20 s) thay vì chỉ 2,5 s.
@@ -567,6 +568,7 @@ export class RuntimeImpl implements Runtime {
   closeForeground = (): void => {
     this.accessResolver?.(false); // rời app khi hộp thoại còn mở = Không (app nền không được giữ hộp thoại)
     this.live.closeForeground();
+    if (this.s.online && this.s.session) void this.refreshCatalog(); // về launcher: nhận cấu hình app mới từ server
     this.publishLive();
   };
   dismissBlockedOpen = (): void => this.set({ blockedOpen: null });

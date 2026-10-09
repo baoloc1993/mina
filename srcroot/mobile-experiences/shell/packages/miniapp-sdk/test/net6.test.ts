@@ -97,7 +97,7 @@ describe('net.requestAccess trên mock', () => {
   test('redirect sang host chưa được phép → NET_BLOCKED, không request nào rời máy tới host đó', async () => {
     const r = rig();
     await r.call('net.requestAccess', { host: 'a.vn' });
-    r.setHop(async (req) => (req.url === 'http://a.vn/rss' ? { status: 301, headers: { location: 'https://www.a.vn/rss' }, body: '' } : { status: 200, headers: {}, body: 'x' }));
+    r.setHop(async (req): Promise<{ status: number; headers: Record<string, string>; body: string }> => (req.url === 'http://a.vn/rss' ? { status: 301, headers: { location: 'https://www.a.vn/rss' }, body: '' } : { status: 200, headers: {}, body: 'x' }));
     const res = await r.call('net.fetch', { url: 'http://a.vn/rss' });
     expect(res.error?.code).toBe('NET_BLOCKED');
     expect(res.error?.detail).toBe('www.a.vn');
@@ -106,7 +106,7 @@ describe('net.requestAccess trên mock', () => {
   test('http → https cùng host: được', async () => {
     const r = rig();
     await r.call('net.requestAccess', { host: 'a.vn' });
-    r.setHop(async (req) => (req.url.startsWith('http://') ? { status: 301, headers: { location: 'https://a.vn/rss' }, body: '' } : { status: 200, headers: {}, body: 'ok' }));
+    r.setHop(async (req): Promise<{ status: number; headers: Record<string, string>; body: string }> => (req.url.startsWith('http://') ? { status: 301, headers: { location: 'https://a.vn/rss' }, body: '' } : { status: 200, headers: {}, body: 'ok' }));
     expect((await r.call('net.fetch', { url: 'http://a.vn/rss' })).result).toMatchObject({ status: 200, body: 'ok' });
   });
   test('offline vẫn hỏi và ghi được; fetch báo OFFLINE (không phải NET_BLOCKED)', async () => {

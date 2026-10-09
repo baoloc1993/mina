@@ -17,7 +17,7 @@ const rows = (m: Machine, withDeleted = true) => m.db.all(`SELECT * FROM ${PREFI
 
 describe('manifest 0.2.0', () => {
   test('khai scope intent.send, sends hai intent calendar.*, bảng note_reminders; migration 002 dựng bảng', () => {
-    expect(manifest.version).toBe('0.2.0');
+    expect(manifest.version).toMatch(/^0\.2\.\d+$/); // 0.2.x: cùng hợp đồng (0.2.1 sửa theo dogfood vòng 5)
     expect(manifest.scopes).toContain('intent.send');
     expect(manifest.intents!.sends).toEqual([
       { type: 'calendar.reminder.create', version: '1' },
