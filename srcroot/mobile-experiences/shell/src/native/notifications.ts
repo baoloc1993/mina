@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { AbstractPowerSyncDatabase } from '@powersync/common';
 import { BridgeError } from '../bridge/types';
+import { pickEvictions } from './notifyEvict';
 
 const CHANNEL = 'mina-default';
 export const MAX_PER_APP = 50;
@@ -65,14 +66,17 @@ export async function scheduleNotification(db: AbstractPowerSyncDatabase, appId:
     'INSERT OR REPLACE INTO platform_notifications (id, app_id, at, title, body, ref, os_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [key(appId, n.id), appId, n.at, n.title, n.body, n.ref, osId],
   );
-  // Giữ ≤ 50 gần nhất mỗi app.
-  const extra = await db.getAll<{ id: string; os_id: string }>(
-    'SELECT id, os_id FROM platform_notifications WHERE app_id = ? ORDER BY at DESC LIMIT -1 OFFSET ?',
-    [appId, MAX_PER_APP],
-  );
-  for (const e of extra) {
-    await Notifications.cancelScheduledNotificationAsync(e.os_id).catch(() => undefined);
-    await db.execute('DELETE FROM platform_notifications WHERE id = ?', [e.id]);
+  await trimApp(db, appId);
+}
+
+/** Mỗi app giữ ≤ 50 thông báo SẮP TỚI gần nhất; dọn dòng đã qua > 1 ngày (chọn bằng hàm thuần `pickEvictions`). */
+async function trimApp(db: AbstractPowerSyncDatabase, appId: string): Promise<void> {
+  const rows = await db.getAll<{ id: string; at: number; os_id: string }>('SELECT id, at, os_id FROM platform_notifications WHERE app_id = ?', [appId]);
+  const { drop } = pickEvictions(rows, Date.now(), MAX_PER_APP);
+  for (const id of drop) {
+    const r = rows.find((x) => x.id === id);
+    if (r?.os_id) await Notifications.cancelScheduledNotificationAsync(r.os_id).catch(() => undefined);
+    await db.execute('DELETE FROM platform_notifications WHERE id = ?', [id]);
   }
 }
 
@@ -103,6 +107,7 @@ export async function restoreNotifications(db: AbstractPowerSyncDatabase): Promi
     'SELECT * FROM platform_notifications WHERE at > ?',
     [Date.now()],
   );
+  await db.execute('DELETE FROM platform_notifications WHERE at < ?', [Date.now() - 86_400_000]);
   if (!rows.length) return;
   await init();
   const live = new Set((await Notifications.getAllScheduledNotificationsAsync()).map((n) => n.identifier));

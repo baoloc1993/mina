@@ -20,6 +20,7 @@ COMPOSE := docker compose --env-file deployment/local/.env -f deployment/local/d
 SB_EXCLUDE := studio,realtime,imgproxy,vector,logflare,postgres-meta,pgadmin-schema-diff,migra,supavisor
 SUPABASE := cd $(BACKEND) && npx --yes supabase@latest
 NOTE_DIR := srcroot/web-experiences/miniapp-note
+CAL_DIR := srcroot/web-experiences/miniapp-calendar
 NPM_BE := cd $(BACKEND) && npm --silent
 
 -include deployment/local/.env
@@ -31,7 +32,7 @@ APPLE_CLIENT_SECRET ?= local-no-apple
 export
 
 help:
-	@echo "Mina — (vòng 3: shell nền + SDK v0 + mock SDK)"
+	@echo "Mina — (vòng 5: Lịch + intent Ghi chú ↔ Lịch)"
 	@echo ""
 	@echo "  make dev      Supabase (+ Storage) + PowerSync (docker) + khoá ký thử + Metro cho dev build Android"
 	@echo "  make check    tokens + typecheck shell + SDK/mock + đóng gói fixtures + CLI registry + Edge Functions"
@@ -61,8 +62,9 @@ check:
 	cd $(SHELL_DIR) && npx tsc --noEmit && npx tsc --noEmit -p packages/miniapp-sdk
 	$(NPM_BE) run typecheck
 	cd $(NOTE_DIR) && npm --silent run typecheck && npm --silent run build
+	cd $(CAL_DIR) && npm --silent run typecheck && npm --silent run build
 	$(NPM_BE) exec -- deno check --no-lock supabase/functions/upload/index.ts supabase/functions/catalog/index.ts supabase/functions/issue-app-token/index.ts
-	@echo "OK: typecheck shell + SDK/mock + Ghi chú (build dist/) + CLI registry + Edge Functions sạch, fixtures đóng được"
+	@echo "OK: typecheck shell + SDK/mock + Ghi chú + Lịch (build dist/) + CLI registry + Edge Functions sạch, fixtures đóng được"
 
 test:
 	$(SUPABASE) test db
@@ -71,6 +73,7 @@ test:
 	cd $(SHELL_DIR) && npx jest
 	cd $(SHELL_DIR) && npm --silent run test:sdk
 	cd $(NOTE_DIR) && npm --silent test
+	cd $(CAL_DIR) && npm --silent test
 
 FIXTURE ?= fixtures/miniapp-hello
 mock:
@@ -82,6 +85,7 @@ seed:
 accept:
 	$(NPM_BE) run accept
 	$(NPM_BE) run accept:notes
+	$(NPM_BE) run accept:calendar
 
 migrate:
 	$(SUPABASE) migration up --local

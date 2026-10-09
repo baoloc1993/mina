@@ -5,9 +5,13 @@ import { NoteSession } from '../crdt/session';
 import { attachImages, attachPdfs, detachAttachment, humanSize, listAttachments, fileUri, type AttachmentRow } from '../data/files';
 import { getNote, restoreNote, setPinned, setTitle, trashNote, type NoteRow } from '../data/repo';
 import { attachTag, detachTag, ensureTag, listTagGroups, tagsByNote, type TagGroup } from '../data/tags';
+import { forgetReminder, listReminders, type ReminderRow } from '../data/reminders';
+import { canRemind, openInCalendar, sendReminder } from '../reminder/send';
+import { formatShort } from '../reminder/time';
 import { newId, type Sdk } from '../sdk';
 import { EditorBody, Toolbar, useNoteEditor } from './Editor';
 import { Banner, Empty, friendly, TagChip, type ToastState } from './kit';
+import { ReminderSheet, type ReminderSubmit } from './ReminderSheet';
 import { TagSheet } from './TagSheet';
 
 type Load = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; session: NoteSession; note: NoteRow };
@@ -90,6 +94,9 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
   const [banner, setBanner] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [sheet, setSheet] = useState(false);
+  const [remSheet, setRemSheet] = useState(false);
+  const [rems, setRems] = useState<ReminderRow[]>([]);
+  const [calBanner, setCalBanner] = useState('');
   const [groups, setGroups] = useState<TagGroup[]>([]);
   const [mine, setMine] = useState<TagGroup[]>([]);
   const [atts, setAtts] = useState<AttachmentRow[]>([]);
@@ -116,7 +123,8 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
   }, [p.readOnly, session]);
 
   const refreshMeta = useCallback(async () => {
-    const [g, n, a] = await Promise.all([listTagGroups(sdk), getNote(sdk, note.id), listAttachments(sdk, note.id)]);
+    const [g, n, a, rl] = await Promise.all([listTagGroups(sdk), getNote(sdk, note.id), listAttachments(sdk, note.id), listReminders(sdk, note.id)]);
+    setRems((old) => (old.length === rl.length && old.every((r, i) => r.id === rl[i].id && r.at_local === rl[i].at_local) ? old : rl));
     setGroups(g);
     setMine([...(await tagsByNote(sdk, g)).get(note.id) ?? []]);
     setAtts(a);
@@ -210,6 +218,31 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
       setNote({ ...note, trashed_at_ms: null });
       p.toast({ msg: 'Đã khôi phục ghi chú' });
     });
+  const onRemind = () => {
+    setMenu(false);
+    if (canRemind({ readOnly: p.readOnly, trashed })) setRemSheet(true);
+  };
+  const submitReminder = async (r: ReminderSubmit): Promise<string> => {
+    const res = await sendReminder(sdk, { noteId: note.id, text: r.text, at: r.at, id: r.id }).catch((e) => {
+      throw new Error(friendly(e));
+    });
+    if (!res.ok) return res.message;
+    setRemSheet(false);
+    setCalBanner('');
+    await refreshMeta();
+    p.toast({ msg: 'Đã gửi tới Lịch' });
+    return '';
+  };
+  const onOpenCal = (id: string) =>
+    guard('write', async () => {
+      const m = await openInCalendar(sdk, id);
+      if (m) setCalBanner(m);
+    });
+  const onForget = (id: string) =>
+    guard('write', async () => {
+      await forgetReminder(sdk, id);
+      await refreshMeta();
+    });
   const onAddImage = () =>
     guard('image', async () => {
       setBusy('img');
@@ -259,6 +292,7 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
       {menu && (
         <div className="menu" role="menu">
           <button role="menuitem" onClick={() => void onPin()}>{note.pinned ? 'Bỏ ghim' : 'Ghim lên đầu'}</button>
+          <button role="menuitem" disabled={!canRemind({ readOnly: p.readOnly, trashed })} onClick={onRemind}>Nhắc tôi</button>
           <button role="menuitem" className="dg" onClick={() => void onTrash()}>Chuyển vào thùng rác</button>
         </div>
       )}
@@ -266,6 +300,14 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
         {trashed && <Banner tone="warn" action={{ label: 'Khôi phục', run: () => void onRestore() }}>Ghi chú này đang ở thùng rác — chỉ xem được.</Banner>}
         {!trashed && p.readOnly && <Banner tone="warn">Chỉ đọc (READ_ONLY) — cần mạng để xác minh lại. Chữ bạn đã gõ vẫn còn.</Banner>}
         {banner && <Banner action={{ label: 'Đã hiểu', run: () => setBanner(null) }}>{banner}</Banner>}
+        {calBanner && <Banner tone="err" action={{ label: 'Đã hiểu', run: () => setCalBanner('') }}>{calBanner}</Banner>}
+        {rems.map((r) => (
+          <div className="remrow" key={r.id}>
+            <span>Lời nhắc: {formatShort(r.at_local)}</span>
+            <button className="link" onClick={() => void onOpenCal(r.id)}>Mở trong Lịch</button>
+            {!viewOnly && <button className="rm" aria-label="Bỏ dòng lời nhắc" onClick={() => void onForget(r.id)}>×</button>}
+          </div>
+        ))}
         <input
           className="ttlinput"
           placeholder="Tiêu đề"
@@ -293,6 +335,7 @@ function Ready(p: EditorProps & { session: NoteSession; first: NoteRow; titleRef
         )}
       </div>
       <Toolbar editor={editor} disabled={viewOnly} />
+      {remSheet && <ReminderSheet noteTitle={title} onSubmit={submitReminder} onClose={() => setRemSheet(false)} />}
       {sheet && <TagSheet groups={groups} selected={selected} onToggle={toggleTag} onCreate={createTag} onClose={() => setSheet(false)} />}
     </div>
   );

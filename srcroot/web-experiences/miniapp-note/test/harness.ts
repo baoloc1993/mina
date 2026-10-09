@@ -7,7 +7,7 @@ import * as Y from 'yjs';
 import { handleRpc, type BridgeContext, type Manifest } from '../../../mobile-experiences/shell/src/bridge/bridge';
 import { createTabBus, type TabBus } from '../../../mobile-experiences/shell/packages/miniapp-sdk/mock/src/bus';
 import { inferTablePrefix, prepareDatabase } from '../../../mobile-experiences/shell/packages/miniapp-sdk/mock/src/db';
-import { createMockHost, type NetMode } from '../../../mobile-experiences/shell/packages/miniapp-sdk/mock/src/host';
+import { createMockHost, type IntentMessage, type NetMode } from '../../../mobile-experiences/shell/packages/miniapp-sdk/mock/src/host';
 import { openNodeDb } from '../../../mobile-experiences/shell/packages/miniapp-sdk/test/nodeDriver';
 import { FRAGMENT } from '../src/crdt/doc';
 import type { Sdk } from '../src/sdk';
@@ -20,12 +20,57 @@ const migrations = readdirSync(join(PUBLIC, 'migrations'))
   .map((name) => ({ name, sql: readFileSync(join(PUBLIC, 'migrations', name), 'utf8') }));
 export const PREFIX = inferTablePrefix(manifest, migrations);
 
+const UUID = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+/** Manifest Lịch giả (schema nhận theo ARCHITECTURE §5 `intent-calendar`) — Lịch thật chưa nằm trong repo test này. */
+export const calendarManifest: Manifest = {
+  id: 'vn.app.calendar',
+  name: 'Lịch',
+  version: '0.1.0',
+  sdk: '^0.1.1',
+  entry: 'index.html',
+  scopes: ['db.own'],
+  tables: ['events'],
+  intents: {
+    sends: [{ type: 'note.open', version: '1' }],
+    receives: [
+      {
+        type: 'calendar.reminder.create',
+        version: '1',
+        schema: {
+          type: 'object',
+          required: ['id', 'title', 'at'],
+          properties: {
+            id: { type: 'string', pattern: UUID },
+            title: { type: 'string', minLength: 1, maxLength: 200 },
+            at: { oneOf: [{ type: 'string', pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$' }, { type: 'number' }] },
+            ref: { type: 'object', required: ['app', 'id'], properties: { app: { type: 'string', maxLength: 64 }, id: { type: 'string', maxLength: 64 } }, additionalProperties: false },
+          },
+          additionalProperties: false,
+        },
+      },
+      {
+        type: 'calendar.event.open',
+        version: '1',
+        schema: { type: 'object', required: ['eventId'], properties: { eventId: { type: 'string', pattern: UUID } }, additionalProperties: false },
+      },
+    ],
+  },
+} as Manifest;
+
+/** Điều khiển Lịch giả: cài/chưa cài, kết quả giao, và các intent đã giao (qua kiểm schema của bridge thật). */
+export interface FakeCalendar {
+  installed: boolean;
+  outcome: 'handled' | 'queued' | 'opened';
+  delivered: IntentMessage[];
+}
+
 type Picked = { name: string; mime: string; base64: string }[];
 export interface Machine {
   sdk: Sdk;
   db: ReturnType<typeof openNodeDb>;
   rpc(method: string, params?: Record<string, unknown>): Promise<unknown>;
   setNet(m: NetMode): void;
+  calendar: FakeCalendar;
   /** Hàng đợi cho hộp chọn ảnh / tệp ở lần gọi kế tiếp. */
   pickImage: Picked;
   pickFile: Picked;
@@ -45,11 +90,16 @@ export function machine(): Machine {
   const m = { pickImage: [] as Picked, pickFile: [] as Picked };
   const bus = createTabBus(() => manifest, `note-test-${Date.now()}-${seq++}`);
   buses.push(bus);
+  const calendar: FakeCalendar = { installed: true, outcome: 'handled', delivered: [] };
+  const fakeBus = {
+    peers: () => [...bus.peers(), ...(calendar.installed ? [calendarManifest] : [])],
+    deliver: async (msg: IntentMessage) => (calendar.delivered.push(msg), calendar.outcome),
+  };
   const mock = createMockHost({
     manifest: () => manifest,
     driver: db,
     hopFetch: async () => ({ status: 200, headers: {}, body: '' }),
-    bus,
+    bus: fakeBus,
     netMode: () => net,
     callbacks: { pickImage: async () => m.pickImage.splice(0), pickFile: async () => m.pickFile.splice(0) },
   });
@@ -74,15 +124,16 @@ export function machine(): Machine {
       toast: (text: string) => rpc('ui.toast', { text }),
     },
     sdk: { info: () => rpc('sdk.info') },
+    intent: { send: (type: string, payload: unknown, o?: { mode?: string; version?: string }) => rpc('intent.send', { type, payload, mode: o?.mode, version: o?.version }) },
   } as unknown as Sdk;
-  return { sdk, db, rpc, setNet: (n) => void (net = n), pickImage: m.pickImage, pickFile: m.pickFile, close: () => bus.close() };
+  return { sdk, db, rpc, calendar, setNet: (n) => void (net = n), pickImage: m.pickImage, pickFile: m.pickFile, close: () => bus.close() };
 }
 
 const T = (name: string) => `${PREFIX}_${name}`;
 type Row = Record<string, unknown>;
 
 /** Đồng bộ một chiều a → b. `lww` = bảng lấy bản của bên gửi khi hai bên cùng có dòng (bản tới sau thắng). */
-export function push(a: Machine, b: Machine, tables = ['notes', 'note_blocks', 'note_tags', 'note_files'], lww = ['notes']): void {
+export function push(a: Machine, b: Machine, tables = ['notes', 'note_blocks', 'note_tags', 'note_files', 'note_reminders'], lww = ['notes']): void {
   const sync = (phys: string, isLww: boolean) => {
     const src = a.db.all(`SELECT * FROM ${phys}`, []) as Row[];
     for (const r of src) {

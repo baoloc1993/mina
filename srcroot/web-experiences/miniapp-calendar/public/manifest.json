@@ -1,0 +1,103 @@
+{
+  "id": "vn.app.calendar",
+  "name": "Lịch",
+  "version": "0.1.0",
+  "sdk": "^0.1.1",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "description": "Lịch gọn: sự kiện và lời nhắc kêu đúng giờ cả khi mất mạng, xem ngày âm, lặp giỗ và rằm theo âm lịch.",
+  "scopes": [
+    "db.own",
+    "notify.local",
+    "intent.send",
+    "ui.native"
+  ],
+  "tables": [
+    "events",
+    "event_overrides"
+  ],
+  "intents": {
+    "sends": [
+      {
+        "type": "note.open",
+        "version": "1"
+      }
+    ],
+    "receives": [
+      {
+        "type": "calendar.reminder.create",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "required": [
+            "id",
+            "title",
+            "at"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "at": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "ref": {
+              "type": "object",
+              "required": [
+                "app",
+                "id"
+              ],
+              "properties": {
+                "app": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "calendar.event.open",
+        "version": "1",
+        "schema": {
+          "type": "object",
+          "required": [
+            "eventId"
+          ],
+          "properties": {
+            "eventId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "network": [],
+  "offline": true
+}

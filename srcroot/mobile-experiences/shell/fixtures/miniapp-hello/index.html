@@ -76,6 +76,12 @@
   <button id="i-unknown">Intent không khai</button>
 </div>
 
+<h2>Mở sự kiện Lịch (calendar.event.open)</h2>
+<div class="group">
+  <input id="ce-id" placeholder="eventId (UUID)" />
+  <button id="ce-open">Mở sự kiện Lịch</button>
+</div>
+
 <h2>Gửi vào Ghi chú</h2>
 <div class="group">
   <button id="nt-create">Gửi vào Ghi chú</button>
@@ -235,6 +241,7 @@
     show('tạo nhắc', m.intent.send('cal.reminder.create', { title: t, at: Date.now() + 60000 }, { mode: 'create' }));
   };
   $('i-open').onclick = function () { show('mở lịch', m.intent.send('cal.event.open', { title: 'Từ Hello' }, { mode: 'open' })); };
+  $('ce-open').onclick = function () { var id = $('ce-id').value.trim() || uuid(); show('mở sự kiện Lịch', m.intent.send('calendar.event.open', { eventId: id }, { mode: 'open' })); };
   // ---------- Ghi chú (intent note.* — AC-6 vòng 4): id do BÊN GỬI sinh, SDK không trả kết quả ----------
   var lastNote = null;
   function noteBody() { return { title: titleEl.value.trim() || 'Gửi từ Hello', body: 'Nội dung gửi từ Hello lúc ' + new Date().toLocaleTimeString('vi-VN') + '\nDòng thứ hai có dấu: đăng ký', url: 'https://vnexpress.net/bai-bao-mau' }; }

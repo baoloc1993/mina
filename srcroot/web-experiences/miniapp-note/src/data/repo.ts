@@ -111,6 +111,7 @@ export async function purgeExpired(sdk: Sdk, now = Date.now()): Promise<number> 
       { sql: 'DELETE FROM note_blocks WHERE note_id = ?', params: [r.id] },
       { sql: 'DELETE FROM note_tags WHERE note_id = ?', params: [r.id] },
       { sql: 'DELETE FROM note_files WHERE note_id = ?', params: [r.id] },
+      { sql: 'DELETE FROM note_reminders WHERE note_id = ?', params: [r.id] },
     ]);
     n++;
   }

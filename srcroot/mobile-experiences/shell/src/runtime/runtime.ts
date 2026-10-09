@@ -35,6 +35,7 @@ import { Connector, type ConnectorHooks } from '../store/connector';
 import { disconnectAndClear, openDatabase, rebuildSchema } from '../store/db';
 import { receiversOf } from './intents';
 import { LiveSet, SUSPEND_ACK_MS } from './liveSet';
+import { NotifyReconciler } from './notifyReconcile';
 import type {
   CatalogItem, DeviceItem, InstallProgress, LauncherApp, RejectionRow, Runtime, RuntimeState, SessionInfo, SignOutResult, ToastItem,
 } from './types';
@@ -98,6 +99,11 @@ export class RuntimeImpl implements Runtime {
   private openTimes: number[] = [];
   private openStart = new Map<string, number>();
   private switchPending: { sub: string } | null = null;
+  private reconciler = new NotifyReconciler();
+  private lastProbe = 0;
+  private probing = false;
+  /** `lastSyncedAt` thấy lúc bắt đầu phiên (có thể cũ) — chỉ giá trị KHÁC nó mới tính là lần đồng bộ đầu của phiên. */
+  private syncBaseline: string | null = null;
 
   // ---------- trạng thái ----------
   getState = (): RuntimeState => this.s;
@@ -234,6 +240,8 @@ export class RuntimeImpl implements Runtime {
 
   private async startSession(token: string): Promise<void> {
     this.signedOutByUs = false;
+    this.reconciler.reset();
+    this.syncBaseline = this.s.sync.lastSyncedAt;
     const info = this.sessionInfoFrom(token);
     if (info.sub) await kvSet(this.db, 'last_sub', info.sub);
     console.log('[rt] startSession', info.email);
@@ -249,6 +257,7 @@ export class RuntimeImpl implements Runtime {
   private async expire(hint: 'expired' | 'revoked'): Promise<void> {
     if (!this.s.session) return;
     this.signedOutByUs = true;
+    this.reconciler.reset();
     this.live.live.forEach((a) => this.live.remove(a));
     this.infos.clear();
     this.set({ session: null, loginHint: hint, live: [], foreground: null, installing: {} });
@@ -304,6 +313,7 @@ export class RuntimeImpl implements Runtime {
     this.catalogResp = null;
     this.installationsMap.clear();
     this.infos.clear();
+    this.reconciler.reset();
     this.live = new LiveSet();
     await rebuildSchema(this.db);
     this.set({ apps: [], live: [], foreground: null, rejections: [], unseenRejections: 0, installing: {}, plan: null });
@@ -757,9 +767,71 @@ export class RuntimeImpl implements Runtime {
       if (connected && this.pendingReorder) void this.flushReorder();
       await this.reconcileInstallations(q.count);
       await this.watchdog(connected);
+      if (Date.now() - this.lastProbe >= 5000 && !this.probing) void this.probeNotifyApps();
     } catch {
       // DB đang bận — nhịp sau
     }
+  }
+
+  /**
+   * Nạp nền theo đồng bộ (contract `shell-notify-reconcile`): mỗi 5 s, với app có scope `notify.local`, so chữ ký bảng
+   * (count + max(updated_at)); quyết định ở `NotifyReconciler` (thuần), ở đây chỉ làm hiệu ứng. Không chặn nhịp tick.
+   */
+  private async probeNotifyApps(): Promise<void> {
+    this.probing = true;
+    this.lastProbe = Date.now();
+    try {
+      if (!this.s.session || this.s.boot !== 'ready') return;
+      const lsa = this.s.sync.lastSyncedAt;
+      if (lsa && lsa !== this.syncBaseline) this.reconciler.markFirstSync();
+      for (const app of this.s.apps) {
+        if (app.status !== 'ok' || !app.manifest.scopes?.includes('notify.local')) continue;
+        const sig = await this.tableSignature(app);
+        const live = this.live.live.includes(app.app_id);
+        const act = this.reconciler.decide(Date.now(), app.app_id, sig, live);
+        if (act === 'emit-sync') this.channels.get(app.app_id)?.emit('sync', this.s.sync);
+        else if (act === 'load') {
+          let ok = false;
+          try {
+            await this.loadBackground(app.app_id);
+            ok = true;
+          } catch {
+            // nuốt lỗi: giữ bẩn, thử lại sau cửa sổ 30 s
+          }
+          this.reconciler.loadFinished(Date.now(), app.app_id, ok);
+          if (ok) this.channels.get(app.app_id)?.emit('sync', this.s.sync);
+        }
+      }
+    } catch {
+      // nhịp sau
+    } finally {
+      this.probing = false;
+    }
+  }
+
+  private async tableSignature(app: AppRow): Promise<string | null> {
+    try {
+      const parts: string[] = [];
+      for (const t of app.manifest.tables ?? []) {
+        const name = `${app.table_prefix}_${t}`;
+        const r = await this.db.getAll<{ n: number; m: string | null }>(`SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM "${name}"`);
+        parts.push(`${t}:${r[0]?.n ?? 0}:${r[0]?.m ?? ''}`);
+      }
+      return parts.join('|');
+    } catch {
+      return null;
+    }
+  }
+
+  /** Nạp nền một app (không hiện, không toast) — cùng nhánh với `deliverIntent`; ném lỗi nếu không sẵn sàng trong 10 s. */
+  private async loadBackground(appId: string): Promise<void> {
+    if (this.live.live.includes(appId)) return;
+    const { row, dir } = await this.pm.prepareOpen(appId);
+    this.infos.set(appId, { row, dir, rpc: (req) => handleRpc(req, { manifest: row.manifest, tablePrefix: row.table_prefix, host: this.makeHost(row) }) });
+    const { evict } = this.live.openBackground(appId);
+    this.publishLive();
+    for (const old of evict) void this.suspendAndRemove(old);
+    await this.whenReady(appId, 10_000);
   }
 
   private async loadInstallations(): Promise<void> {

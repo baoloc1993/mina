@@ -35,6 +35,7 @@ bucket_definitions:
     data:
       - select * from app_vn_app_note_note_blocks where tenant_id = bucket.tenant_id
       - select * from app_vn_app_note_note_files where tenant_id = bucket.tenant_id
+      - select * from app_vn_app_note_note_reminders where tenant_id = bucket.tenant_id
       - select * from app_vn_app_note_note_tags where tenant_id = bucket.tenant_id
       - select * from app_vn_app_note_notes where tenant_id = bucket.tenant_id
   app_vn_app_private_a:

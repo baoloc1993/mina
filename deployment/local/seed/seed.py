@@ -5,6 +5,9 @@
   python deployment/local/seed/seed.py --notes  # (vòng 4, dogfood đợt 2) thêm: cài Ghi chú cho cả 2 tenant + ~30 ghi chú mẫu (có note 250 update,
                                                 #   2 note thùng rác: còn 3 ngày + quá hạn). Mặc định KHÔNG làm — đợt 1 cần DB sạch (chưa có note).
 
+  python deployment/local/seed/seed.py --calendar  # (vòng 5, dogfood đợt 2) thêm: cài Lịch cho cả 2 tenant + ~12 mục Lịch mẫu cho tenant-a
+                                                #   (srcroot/web-experiences/miniapp-calendar/scripts/seed-calendar.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
+
 Registry sau seed (vòng 3): hello (bản trong fixtures/miniapp-hello, published, cài cho cả 2 tenant) · hello-cal 0.1.0 (published,
 KHÔNG cài sẵn — cài từ launcher) · vn.app.private-a 0.0.1 (riêng của tenant-a, cài cho tenant-a) · hello 0.5.0 DRAFT có migration
 cố ý lỗi trên SQLite (fixtures/miniapp-hello-bad-migration, tenant-a là tester) · vài core_tags cho tenant-a. Chạy lại an toàn:
@@ -27,6 +30,8 @@ HELLO_BAD_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-bad-migration")
 PRIVATE_A = os.path.join(BACKEND, "fixtures", "private-a")
 NOTE_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-note")
 NOTE_DIST = os.path.join(NOTE_APP, "dist")
+CAL_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-calendar")
+CAL_DIST = os.path.join(CAL_APP, "dist")
 BUILD = os.path.join(ROOT, "deployment", "local", ".build")
 SYNC_RULES = os.path.join(BACKEND, "powersync", "sync-rules.yaml")
 DB_CONTAINER = "supabase_db_platform-backend"
@@ -154,16 +159,47 @@ CORE_TAGS = [
 ]
 
 
-def build_note_app() -> str | None:
-    """`npm run build` của Ghi chú (nếu chưa có dist/) rồi trả thư mục dist để publish. Thiếu mã nguồn → None."""
-    if not os.path.isfile(os.path.join(NOTE_APP, "package.json")):
+def build_web_app(app_dir: str, dist: str, label: str) -> str | None:
+    """`npm run build` của mini app web (nếu chưa có dist/ hoặc dist/ lệch version với package.json) rồi trả thư mục dist để publish.
+    Thiếu mã nguồn hoặc thiếu script build → None."""
+    pkg_path = os.path.join(app_dir, "package.json")
+    if not os.path.isfile(pkg_path):
         return None
-    if not os.path.isfile(os.path.join(NOTE_DIST, "manifest.json")):
-        print("  dựng Ghi chú (npm run build)…")
-        r = subprocess.run(["npm", "run", "--silent", "build"], cwd=NOTE_APP, shell=(os.name == "nt"), capture_output=True, text=True, encoding="utf-8")
+    with open(pkg_path, encoding="utf-8") as f:
+        pkg = json.load(f)
+    built = None
+    if os.path.isfile(os.path.join(dist, "manifest.json")):
+        built = manifest_of(dist).get("version")
+    if built is None or built != pkg.get("version"):
+        if "build" not in pkg.get("scripts", {}):
+            return dist if built else None
+        print(f"  dựng {label} (npm run build)…")
+        r = subprocess.run(["npm", "run", "--silent", "build"], cwd=app_dir, shell=(os.name == "nt"), capture_output=True, text=True, encoding="utf-8")
         if r.returncode != 0:
-            sys.exit(f"build Ghi chú lỗi: {(r.stderr or r.stdout).strip()[-600:]}")
-    return NOTE_DIST
+            sys.exit(f"build {label} lỗi: {(r.stderr or r.stdout).strip()[-600:]}")
+    return dist if os.path.isfile(os.path.join(dist, "manifest.json")) else None
+
+
+def build_note_app() -> str | None:
+    return build_web_app(NOTE_APP, NOTE_DIST, "Ghi chú")
+
+
+def seed_calendar(tenants: dict) -> None:
+    """Dogfood đợt 2: cài Lịch cho cả 2 tenant + mục Lịch mẫu cho tenant-a. Chạy sau khi sync rules đã có bucket của Lịch."""
+    if not sql("select 1 from app_versions where app_id = 'vn.app.calendar' limit 1"):
+        print("  CẢNH BÁO: Lịch (vn.app.calendar) chưa publish (thiếu miniapp-calendar/dist) — bỏ qua dữ liệu mẫu Lịch")
+        return
+    for e, tid in tenants.items():
+        if not sql(f"select 1 from installations where tenant_id = '{tid}' and app_id = 'vn.app.calendar' and enabled"):
+            sql(f"select public._install_app('{tid}', 'vn.app.calendar')")
+    ta = tenants[USERS[0]]
+    gen = subprocess.run(["node", os.path.join("scripts", "seed-calendar.mjs"), ta], cwd=CAL_APP, capture_output=True, text=True, encoding="utf-8")
+    if gen.returncode != 0:
+        sys.exit(f"sinh dữ liệu Lịch lỗi: {gen.stderr.strip()}")
+    r = subprocess.run(["docker", "exec", "-i", DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q"], input=gen.stdout, capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        sys.exit(f"nạp Lịch mẫu lỗi: {r.stderr.strip()}")
+    print(f"  {USERS[0]}: cài vn.app.calendar + {gen.stderr.strip()} (tenant-b: chỉ cài, chưa có mục)")
 
 
 def seed_notes(tenants: dict) -> None:
@@ -191,7 +227,15 @@ def seed() -> None:
     publish_fixture(stage_fixture("hello-cal", HELLO_CAL_FIXTURE), "hello-cal 0.1.0 (fixtures/miniapp-hello-cal)")
     publish_fixture(PRIVATE_A, "private-a", owner=USERS[0])
     publish_fixture(build_note_app(), "Ghi chú (vn.app.note, srcroot/web-experiences/miniapp-note/dist)")
-    sql("select public.ensure_note_limits()")  # trần độ dài / giá trị hợp lệ của bảng Ghi chú ở server (migration 20261009000003) — chạy lại sau publish dựng bảng
+    # Lịch (vn.app.calendar, vòng 5): chỉ publish khi gói đã dựng (dist/ do phiên khác viết); thiếu → cảnh báo, không lỗi.
+    cal_dir = CAL_DIST if os.path.isfile(os.path.join(CAL_DIST, "manifest.json")) else None  # không tự build: gói đang được viết
+    if cal_dir:
+        publish_fixture(cal_dir, "Lịch (vn.app.calendar, srcroot/web-experiences/miniapp-calendar/dist)")
+    else:
+        print("  CẢNH BÁO: chưa có srcroot/web-experiences/miniapp-calendar/dist (gói Lịch chưa dựng) — bỏ qua publish Lịch")
+    # Trần độ dài / giá trị hợp lệ của bảng Ghi chú + Lịch ở server (migration 20261009000003/4) — chạy lại sau publish dựng bảng
+    sql("select public.ensure_note_limits()")
+    sql("select public.ensure_calendar_limits()")
 
     tenants = {}
     for i, e in enumerate(USERS):
@@ -250,6 +294,8 @@ def seed() -> None:
 
     if "--notes" in sys.argv:
         seed_notes(tenants)
+    if "--calendar" in sys.argv:
+        seed_calendar(tenants)
 
 
 if __name__ == "__main__":

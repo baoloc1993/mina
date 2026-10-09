@@ -43,7 +43,7 @@ describe('manifest fixture', () => {
     expect(m.scopes.filter((s: string) => /^core\.(contacts|files)|^notify/.test(s))).toEqual([]);
     expect(m.tables).toEqual(['items', 'drafts']);
     expect(m.network).toEqual(['vnexpress.net']);
-    expect(m.intents.sends.map((i: { type: string }) => i.type)).toEqual(['cal.reminder.create', 'cal.event.open', 'note.create', 'note.open']);
+    expect(m.intents.sends.map((i: { type: string }) => i.type)).toEqual(['cal.reminder.create', 'cal.event.open', 'calendar.event.open', 'note.create', 'note.open']);
   });
 
   test('hello-cal nhận đúng hai intent với schema chặt', () => {

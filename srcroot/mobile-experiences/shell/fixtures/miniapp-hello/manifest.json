@@ -1,7 +1,7 @@
 {
   "id": "vn.app.hello",
   "name": "Hello",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "sdk": "^0.1",
   "entry": "index.html",
   "icon": "icon.png",
@@ -12,6 +12,7 @@
     "sends": [
       { "type": "cal.reminder.create", "version": "1" },
       { "type": "cal.event.open", "version": "1" },
+      { "type": "calendar.event.open", "version": "1" },
       { "type": "note.create", "version": "1" },
       { "type": "note.open", "version": "1" }
     ],

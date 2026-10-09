@@ -1,15 +1,18 @@
 {
   "id": "vn.app.note",
   "name": "Ghi chú",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "sdk": "^0.1.1",
   "entry": "index.html",
   "icon": "icon.png",
   "description": "Ghi chú gọn: viết được cả khi mất mạng, hai máy sửa chung không mất chữ, tìm không cần gõ dấu.",
-  "scopes": ["db.own", "core.tags:read", "core.tags:write", "storage.files", "ui.native"],
-  "tables": ["notes", "note_blocks", "note_tags", "note_files"],
+  "scopes": ["db.own", "core.tags:read", "core.tags:write", "storage.files", "ui.native", "intent.send"],
+  "tables": ["notes", "note_blocks", "note_tags", "note_files", "note_reminders"],
   "intents": {
-    "sends": [],
+    "sends": [
+      { "type": "calendar.reminder.create", "version": "1" },
+      { "type": "calendar.event.open", "version": "1" }
+    ],
     "receives": [
       {
         "type": "note.create",
