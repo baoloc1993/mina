@@ -286,6 +286,9 @@ h3 { margin: 0; font-size: var(--text-lg); }
       <div class="sys"><h4>Cho phép Mina truy cập ảnh?</h4><div class="muted">ui.pickImage — hỏi lần đầu</div><div class="row"><button class="btn sec" onclick="sysDeny()">Từ chối</button><button class="btn" onclick="sysAllow()">Cho phép</button></div></div>
       <div class="sys"><h4>Chia sẻ qua…</h4><div class="muted">ui.share — share sheet hệ thống</div><div class="row"><button class="btn sec" onclick="go('S5');toast('Đã huỷ chia sẻ (không phải lỗi)')">Huỷ</button><button class="btn" onclick="go('S5');toast('Đã chia sẻ')">Zalo</button></div></div>
       <div class="sys"><h4>🔔 Hello Lịch · 1 phút trước</h4><div>Nhắc: Mua sữa — 18:00</div><div class="muted">notify.schedule — kêu khi offline, shell đã tắt</div><button class="btn sec" onclick="openApp('cal');toast('Mở từ thông báo · ref: rem-1')">Bấm mở app</button></div>
+      <!-- Vòng 6 — delta S9: hai hộp mới của SDK 0.1.2 -->
+      <div class="sys"><h4>Cho phép Đọc báo truy cập blog.example.dev?</h4><div class="muted">net.requestAccess — hộp thoại hệ thống (C9) của shell; app chỉ nhận {granted}</div><div class="row"><button class="btn sec" onclick="askHost()">Mở hộp thoại</button><button class="btn" onclick="openDetail('news')">Xem ở S4 Đọc báo</button></div></div>
+      <div class="sys"><h4>🔒 vnexpress.net/gia-xang-giam… · ×</h4><div class="muted">ui.openUrl — trình duyệt trong app (Custom Tabs), tách khỏi WebView, không qua whitelist mạng; thanh địa chỉ hiện thật</div><div class="row"><button class="btn sec" onclick="go('S5');toast('Đóng trình duyệt → về app, không lỗi')">Đóng trình duyệt</button></div></div>
     </div>
   </section>
 
@@ -353,6 +356,9 @@ const APPS = {
   cal:   { id: 'vn.app.hello-cal', name: 'Hello Lịch', ver: '0.1.0', ic: 'L', cls: 'alt', desc: 'App mẫu: nhận nhắc, thông báo đúng giờ, ảnh, chia sẻ, mạng tới vnexpress.net.', scopes: ['Dữ liệu của app', 'Thông báo', 'Ảnh', 'Chia sẻ', 'Mạng tới vnexpress.net', 'Tag dùng chung (đọc)'] },
   priv:  { id: 'vn.app.private-a', name: 'Riêng của A', ver: '0.1.0', ic: 'A', cls: 'priv', priv: true, desc: 'App làm riêng cho tenant này — không hiện với tenant khác.', scopes: ['Dữ liệu của app'] },
   hello2:{ id: 'vn.app.hello-b', name: 'Hello B', ver: '0.2.0', ic: 'B', cls: '', desc: 'Bản sao của Hello để thử vòng đời nhiều app (app thứ 4).', scopes: ['Dữ liệu của app'] },
+  // Vòng 6 — delta S4: app online có "Trang app được phép truy cập" ba nhóm (theo app / theo cấu hình / bạn cho phép → Thu hồi)
+  news:  { id: 'vn.app.news', name: 'Đọc báo', ver: '0.1.0', ic: 'Đ', cls: 'alt', desc: 'Đọc tin từ nguồn RSS bạn chọn, lưu đọc sau xem offline, lưu bài thành note, đặt nhắc đọc.', scopes: ['Dữ liệu của app', 'Truy cập mạng', 'Hỏi bạn trước khi truy cập trang mới', 'Gửi yêu cầu tới app khác', 'Chọn ảnh và chia sẻ'],
+           hosts: { app: [], config: ['vnexpress.net', 'tuoitre.vn', 'thanhnien.vn', 'dantri.com.vn', 'vietnamnet.vn', 'laodong.vn'], user: [['blog.example.dev', '08/10'], ['10.0.2.2:8787', '09/10']] } },
 };
 const state = { screen: 'S1', signedIn: false, net: 'online', ro: false, clean: false, update: false, revoked: false, noCache: false, installErr: '',
   installed: ['hello'], order: ['hello'], uninstalled: [], progress: {}, lives: [], current: null, appState: { hello: { draft: '' } }, history: [], rejections: 1, devices: [{ n: 'Pixel 7', p: 'Android 14', t: 'đang dùng', me: true }, { n: 'Galaxy A14', p: 'Android 13', t: '2 giờ trước' }], tags: ['việc nhà'], photo: false, matrix: null };
@@ -411,7 +417,7 @@ function renderS3() {
   if (state.net === 'offline') b.innerHTML += `<div class="banner warn"><span>Đang xem bản đã lưu — cần mạng để cài</span></div>`;
   if (state.net === 'syncing') { b.innerHTML += `<div class="skel"><div></div><div></div><div></div></div>`; return; }
   if (state.clean) { b.innerHTML += `<div class="empty"><div class="big">▦</div><div>Catalog trống — chưa có app nào được phát hành cho bạn</div></div>`; return; }
-  ['hello', 'cal', 'priv', 'hello2'].forEach(k => {
+  ['hello', 'cal', 'priv', 'hello2', 'news'].forEach(k => {
     const a = APPS[k]; const inst = state.installed.includes(k); const p = state.progress[k];
     let act = '', extra = '', cls = '';
     if (k === 'hello' && state.revoked) { cls = 'danger-state'; extra = `<div class="muted" style="color:var(--color-danger)">Không có bản an toàn (NO_SAFE_VERSION)</div>`; act = `<button class="btn sec" disabled>Cài</button>`; }
@@ -450,7 +456,19 @@ function renderS4() {
     <div class="card"><div class="ic ${a.cls}">${a.ic}</div><div class="meta"><div class="name">${a.name}</div><div class="muted">${inst ? 'Đang chạy bản' : 'Bản'} ${a.ver}${un ? ' · đã gỡ' : ''}</div></div></div>
     ${status}${main}
     <h3>App này dùng</h3><div class="list">${a.scopes.map(s => `<div class="item"><div class="t"><b>${s}</b></div></div>`).join('')}</div>
+    ${a.hosts ? `<h3>Trang app được phép truy cập</h3><div class="muted">Mạng chỉ tới đúng các trang này. Trang bạn đã cho phép thì thu hồi được.</div><div class="list">${[
+      ...a.hosts.app.map(h => `<div class="item"><div class="t"><b>${h}</b><div class="muted">theo app</div></div></div>`),
+      ...a.hosts.config.map(h => `<div class="item"><div class="t"><b>${h}</b><div class="muted">theo cấu hình</div></div></div>`),
+      ...a.hosts.user.map(([h, d]) => `<div class="item"><div class="t"><b>${h}</b><div class="muted">bạn cho phép ${d}</div></div><button class="btn sec" style="width:auto;min-height:40px" onclick="revokeHost('${h}')">Thu hồi</button></div>`),
+    ].join('') || '<div class="muted">Chưa có trang nào</div>'}</div>` : ''}
     <div class="muted">${a.desc}</div>`;
+}
+function revokeHost(h) {
+  const a = APPS[detail];
+  dialog('Thu hồi ' + h + '?', 'Đọc báo sẽ không tải được từ trang này nữa cho tới khi bạn cho phép lại (khi thêm nguồn). Các máy khác của bạn cũng thu hồi theo.', [['Huỷ', 'sec', closeDialog], ['Thu hồi', '', () => { a.hosts.user = a.hosts.user.filter(([x]) => x !== h); closeDialog(); render(); toast('Đã thu hồi ' + h + ' — lần gọi sau NET_BLOCKED'); }]]);
+}
+function askHost() {
+  dialog('Cho phép Đọc báo truy cập blog.example.dev?', 'Để tải tin từ blog.example.dev<div class="muted" style="margin-top:var(--space-sm)">Hộp thoại hệ thống do Mina hiện khi app gọi net.requestAccess. Thu hồi ở Catalog › Đọc báo.</div>', [['Không', 'sec', () => { closeDialog(); toast('App nhận {granted: false} — không lưu nguồn'); }], ['Cho phép', '', () => { const a = APPS.news; if (!a.hosts.user.some(([x]) => x === 'blog.example.dev')) a.hosts.user.push(['blog.example.dev', '09/10']); closeDialog(); toast('App nhận {granted: true} — đã ghi core_net_grants (đồng bộ sang máy khác)'); }]]);
 }
 function uninstall(k) {
   if (state.net === 'offline') return toast('Cần mạng để gỡ (OFFLINE)', true);

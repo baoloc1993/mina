@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mina — prototype Đọc báo (vòng 6)</title>
+<style>
+/* Token: bản sao đúng DESIGN-SYSTEM.md §2 — nơi DUY NHẤT có giá trị thật */
+:root {
+  --color-bg: #FFFFFF;
+  --color-surface: #F2F4F7;
+  --color-text: #111318;
+  --color-text-muted: #5B6472;
+  --color-primary: #0A5BD3;
+  --color-on-primary: #FFFFFF;
+  --color-border: #6F7886;
+  --color-danger: #C62828;
+  --color-success: #1B7A3E;
+  --color-warning: #8A5200;
+  --color-overlay: #111318;
+  --font-sans: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow: 0 2px 8px rgba(17,19,24,.08);
+  --tap-min: 48px;
+  --icon-app: 64px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; font-family: var(--font-sans); font-size: var(--text-base); color: var(--color-text); background: var(--color-surface); }
+button { font: inherit; cursor: pointer; color: inherit; }
+input, select { font: inherit; color: inherit; }
+.muted { color: var(--color-text-muted); font-size: var(--text-sm); }
+h3 { margin: 0; font-size: var(--text-lg); }
+[hidden] { display: none !important; }
+
+/* Trang: khung điện thoại + bảng giả lập */
+.page { display: flex; gap: var(--space-lg); justify-content: center; align-items: flex-start; padding: var(--space-lg); flex-wrap: wrap; }
+.phone { width: 360px; height: 800px; background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; position: relative; display: flex; flex-direction: column; border: 1px solid var(--color-border); }
+.sim { width: 340px; background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--space-md); font-size: var(--text-sm); }
+.sim h2 { font-size: var(--text-lg); margin: 0 0 var(--space-sm); }
+.sim label { display: flex; align-items: center; gap: var(--space-sm); min-height: 36px; }
+.sim fieldset { border: 1px solid var(--color-border); border-radius: var(--radius-md); margin: 0 0 var(--space-sm); padding: var(--space-sm) var(--space-md); }
+.sim legend { color: var(--color-text-muted); padding: 0 var(--space-xs); }
+.sim .nav { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.sim .nav button, .sim .nav select { padding: var(--space-xs) var(--space-sm); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); font-size: var(--text-sm); min-height: 32px; }
+.sim .nav button.on { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+.sim .logl { margin: var(--space-xs) 0 0; padding-left: var(--space-md); max-height: 140px; overflow: auto; }
+@media (max-width: 600px) {
+  .page { padding: 0; gap: 0; }
+  .phone { width: 100%; height: 100vh; border-radius: 0; border: 0; }
+  .sim { width: 100%; border-radius: 0; }
+}
+
+/* Thanh tiêu đề shell (S5) mô phỏng: tên app + chip C6 + nút đóng */
+.shellbar { display: flex; align-items: center; gap: var(--space-sm); min-height: 44px; padding: 0 var(--space-md); background: var(--color-surface); font-size: var(--text-sm); font-weight: 600; }
+.shellbar .nm { flex: 1; }
+.shellbar .x { min-width: 36px; min-height: 36px; border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--text-lg); }
+.chip6 { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 0 var(--space-sm); border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: var(--text-sm); font-weight: 600; background: var(--color-bg); white-space: nowrap; }
+.chip6.ok { color: var(--color-success); }
+.chip6.off { color: var(--color-warning); }
+.chip6 .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+
+/* Thanh tiêu đề của app (C7) */
+.bar { display: flex; align-items: center; gap: var(--space-sm); min-height: 56px; padding: 0 var(--space-md); background: var(--color-bg); }
+.bar .title { font-size: var(--text-xl); font-weight: 700; flex: 1; }
+.bar .title.small { font-size: var(--text-lg); text-align: center; }
+.iconbtn { min-width: var(--tap-min); min-height: var(--tap-min); border: 0; background: transparent; color: var(--color-primary); font-size: var(--text-lg); border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; }
+.iconbtn.txt { font-size: var(--text-base); font-weight: 600; padding: 0 var(--space-sm); }
+.iconbtn[disabled] { opacity: .4; cursor: default; }
+.body { flex: 1; overflow: auto; padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); position: relative; }
+.body > * { flex-shrink: 0; }
+
+/* C1 / C2 nút */
+.btn { min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); }
+.btn.sec { background: var(--color-bg); color: var(--color-primary); border: 1px solid var(--color-border); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-primary); }
+.btn.dangersec { background: var(--color-bg); color: var(--color-danger); border: 1px solid var(--color-border); }
+.btn.slim { width: auto; min-height: var(--tap-min); padding: 0 var(--space-md); }
+.btn[disabled] { opacity: .4; cursor: default; }
+.btn.busy::before { content: ""; width: 18px; height: 18px; border: 2px solid var(--color-on-primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+.btn.sec.busy::before { border-color: var(--color-primary); border-top-color: transparent; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 50% { opacity: .35; } }
+
+/* C3 ô nhập */
+.input { min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); font-size: var(--text-base); color: var(--color-text); width: 100%; }
+.input.err { border-color: var(--color-danger); }
+.errtxt { color: var(--color-danger); font-size: var(--text-sm); margin-top: var(--space-xs); }
+.warntxt { color: var(--color-warning); font-size: var(--text-sm); margin-top: var(--space-xs); }
+.lbl { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted); margin-bottom: var(--space-xs); display: block; }
+.row { display: flex; gap: var(--space-sm); align-items: center; }
+
+/* C18 chip */
+.tags { display: flex; gap: var(--space-sm); flex-wrap: nowrap; overflow-x: auto; align-items: center; padding-bottom: var(--space-xs); }
+.tagchip { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 36px; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; color: var(--color-text); }
+.tagchip.on { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+.tagchip.mini { min-height: 24px; padding: 0 var(--space-sm); font-weight: 400; color: var(--color-text-muted); }
+
+/* C8 banner */
+.banner { display: flex; gap: var(--space-sm); align-items: center; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--color-surface); border-left: 4px solid var(--color-primary); font-size: var(--text-sm); }
+.banner.warn { border-left-color: var(--color-warning); color: var(--color-warning); }
+.banner.err { border-left-color: var(--color-danger); color: var(--color-danger); }
+.banner.info { color: var(--color-primary); }
+.banner span { flex: 1; }
+.banner .btn { width: auto; min-height: 36px; padding: 0 var(--space-sm); font-size: var(--text-sm); }
+
+/* C13 khuôn rỗng / lỗi / đang tải */
+.empty { text-align: center; padding: var(--space-xl) var(--space-md); display: flex; flex-direction: column; align-items: center; gap: var(--space-md); color: var(--color-text-muted); }
+.empty .big { font-size: 56px; line-height: 1; opacity: .5; }
+.empty .btn { width: auto; }
+.empty.err { color: var(--color-danger); }
+.skel { display: flex; flex-direction: column; gap: var(--space-sm); }
+.skel div { height: 88px; border-radius: var(--radius-lg); background: var(--color-surface); animation: blink 1.2s infinite; }
+
+/* C29 hàng bài báo */
+.group { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted); margin: 0 0 var(--space-xs); }
+.list { display: flex; flex-direction: column; gap: var(--space-sm); }
+.arow { display: flex; gap: var(--space-sm); align-items: stretch; width: 100%; background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-md); min-height: var(--tap-min); }
+.arow .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-xs); text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; }
+.arow .ttl { font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+.arow .sub { font-size: var(--text-sm); color: var(--color-text-muted); display: flex; gap: var(--space-xs); flex-wrap: wrap; align-items: center; }
+.arow .sum { font-size: var(--text-sm); color: var(--color-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.arow.read .ttl { color: var(--color-text-muted); font-weight: 400; }
+.arow .thumb { width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--color-border); flex: none; display: flex; align-items: center; justify-content: center; color: var(--color-on-primary); font-size: var(--text-sm); }
+.arow .thumb.loading { animation: blink 1.2s infinite; background: var(--color-surface); border: 1px solid var(--color-border); }
+.arow .acts { display: flex; flex-direction: column; justify-content: space-between; flex: none; }
+.ab { min-width: var(--tap-min); min-height: var(--tap-min); border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--text-lg); border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; }
+.ab.on { color: var(--color-primary); }
+.ab[disabled] { opacity: .4; cursor: default; }
+
+/* C30 hàng nguồn */
+.srow { display: flex; gap: var(--space-sm); align-items: center; width: 100%; background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-md); min-height: var(--tap-min); }
+.srow .st { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--color-success); }
+.srow .st.warn { background: var(--color-warning); }
+.srow .st.busy { background: var(--color-primary); animation: blink 1s infinite; }
+.srow .st.none { background: var(--color-border); }
+.srow .mid { flex: 1; min-width: 0; text-align: left; background: transparent; border: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.srow .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .sub { font-size: var(--text-sm); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .sub.err { color: var(--color-warning); }
+
+/* C31 thanh tab đáy */
+.tabs { display: flex; border-top: 1px solid var(--color-border); background: var(--color-bg); }
+.tabs button { flex: 1; min-height: 56px; border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--text-sm); font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.tabs button .ic { font-size: var(--text-lg); line-height: 1; }
+.tabs button.on { color: var(--color-primary); }
+
+/* C9 hộp thoại · C24 sheet · C10 toast */
+.scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--color-overlay) 45%, transparent); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
+.scrim.mid { align-items: center; padding: var(--space-md); }
+.dialog { background: var(--color-bg); border-radius: var(--radius-lg); padding: var(--space-md); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: var(--space-md); width: 100%; }
+.dialog .col { display: flex; flex-direction: column; gap: var(--space-sm); }
+.dialog .sys { font-size: var(--text-sm); color: var(--color-text-muted); }
+.sheet { background: var(--color-bg); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--space-md); box-shadow: var(--shadow); width: 100%; display: flex; flex-direction: column; gap: var(--space-md); max-height: 88%; overflow: auto; }
+.toast { position: absolute; left: var(--space-md); right: var(--space-md); bottom: 72px; z-index: 50; display: flex; gap: var(--space-sm); align-items: center; background: var(--color-text); color: var(--color-bg); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); font-size: var(--text-sm); box-shadow: var(--shadow); }
+.toast span { flex: 1; }
+.toast .btn { width: auto; min-height: 36px; background: var(--color-bg); color: var(--color-primary); font-size: var(--text-sm); }
+.screen { display: none; flex-direction: column; flex: 1; min-height: 0; }
+.screen.on { display: flex; }
+.lnk { display: flex; align-items: center; justify-content: space-between; min-height: var(--tap-min); width: 100%; border: 0; border-radius: var(--radius-md); background: var(--color-surface); padding: 0 var(--space-md); text-align: left; gap: var(--space-sm); }
+.lnk .val { color: var(--color-primary); font-weight: 600; text-align: right; }
+.lnk[disabled] { opacity: .4; cursor: default; }
+.quick { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+.quick .btn { width: auto; }
+.browser { position: absolute; inset: 0; background: var(--color-bg); z-index: 20; display: flex; flex-direction: column; }
+.browser .urlbar { display: flex; gap: var(--space-sm); align-items: center; min-height: 56px; padding: 0 var(--space-md); background: var(--color-surface); font-size: var(--text-sm); }
+.browser .urlbar .u { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
+.browser .pg { flex: 1; padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); overflow: auto; }
+.browser .pg .ph { height: 160px; border-radius: var(--radius-lg); background: var(--color-surface); }
+.browser .pg .ln { height: 14px; border-radius: 7px; background: var(--color-surface); }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="phone" id="phone">
+  <!-- Thanh tiêu đề shell S5 (mô phỏng, không thuộc app) -->
+  <div class="shellbar"><span class="nm">Đọc báo</span><span class="chip6 ok" id="chip6"><span class="dot"></span><span id="chip6-txt">Đã đồng bộ</span></span><button class="x" title="Đóng mini app" onclick="toast('BACK/× → về launcher (shell)')">×</button></div>
+  <div id="ro-banner" class="banner warn" style="margin:var(--space-sm) var(--space-md) 0;border-radius:var(--radius-md)" hidden><span>Tài khoản đang ở chế độ chỉ đọc (READ_ONLY) — vẫn đọc được tin, không lưu được</span></div>
+
+  <!-- S19 Tin mới -->
+  <section class="screen" id="S19" data-screen="S19">
+    <div class="bar"><div class="title">Tin mới</div><button class="iconbtn txt" id="btn-refresh" onclick="refresh()">Làm mới</button></div>
+    <div class="body" id="s19-body"></div>
+  </section>
+
+  <!-- S20 Đọc sau -->
+  <section class="screen" id="S20" data-screen="S20">
+    <div class="bar"><div class="title">Đọc sau</div></div>
+    <div class="body" id="s20-body"></div>
+  </section>
+
+  <!-- S21 Nguồn -->
+  <section class="screen" id="S21" data-screen="S21">
+    <div class="bar"><div class="title">Nguồn</div><button class="iconbtn txt" id="btn-addsrc" onclick="openAdd()">+ Thêm</button></div>
+    <div class="body" id="s21-body"></div>
+  </section>
+
+  <!-- C31 thanh tab đáy -->
+  <div class="tabs" id="tabs">
+    <button onclick="go('S19')" id="tab-S19"><span class="ic">▤</span>Tin mới</button>
+    <button onclick="go('S20')" id="tab-S20"><span class="ic">☆</span><span id="tab-saved">Đọc sau</span></button>
+    <button onclick="go('S21')" id="tab-S21"><span class="ic">≡</span>Nguồn</button>
+  </div>
+
+  <div id="overlay"></div>
+  <div class="toast" id="toast" hidden><span id="toast-txt"></span><button class="btn" id="toast-btn" hidden>Mở</button></div>
+</div>
+
+<!-- ===== BẢNG GIẢ LẬP ===== -->
+<div class="sim">
+  <h2>Giả lập</h2>
+  <fieldset><legend>Màn hình</legend><div class="nav" id="nav"></div></fieldset>
+  <fieldset><legend>Mạng (chip C6)</legend>
+    <label><input type="radio" name="net" value="online" checked onchange="setNet(this.value)"> Online, đã đồng bộ</label>
+    <label><input type="radio" name="net" value="offline" onchange="setNet(this.value)"> Offline (máy bay)</label>
+  </fieldset>
+  <fieldset><legend>Trạng thái</legend>
+    <label><input type="checkbox" id="sim-ro" onchange="S.ro=this.checked;render()"> Quá ân hạn → chỉ đọc (READ_ONLY)</label>
+    <label><input type="checkbox" id="sim-clean" onchange="setClean(this.checked)"> DB sạch (chưa có nguồn)</label>
+    <label><input type="checkbox" id="sim-nonote" onchange="S.noNote=this.checked"> Ghi chú chưa cài (INTENT_NO_HANDLER)</label>
+    <label><input type="checkbox" id="sim-nocal" onchange="S.noCal=this.checked"> Lịch chưa cài (INTENT_NO_HANDLER)</label>
+  </fieldset>
+  <fieldset><legend>Dán địa chỉ RSS → máy chủ trả gì</legend>
+    <select class="input" style="min-height:40px;width:100%" id="sim-feed">
+      <option value="ok">Feed hợp lệ (RSS 2.0, 12 bài)</option>
+      <option value="atom">Feed hợp lệ (Atom 1.0, 5 bài)</option>
+      <option value="html">Trang HTML, không phải feed (INVALID_REQUEST)</option>
+      <option value="404">404 (NET_ERROR)</option>
+      <option value="redirect">Chuyển hướng sang host khác (NET_BLOCKED)</option>
+      <option value="big">Thân > 5 MB (NET_ERROR)</option>
+    </select>
+  </fieldset>
+  <fieldset><legend>Máy khác / máy chủ</legend>
+    <div class="nav">
+      <button onclick="simB('save')">Máy B lưu đọc sau bài đầu</button>
+      <button onclick="simB('read')">Máy B đọc bài thứ 2</button>
+      <button onclick="simB('revoke')">Máy B thu hồi host blog.example.dev</button>
+      <button onclick="simB('grant')">Máy B cho phép host khoahoc.tv</button>
+      <button onclick="simB('config')">set-config: bỏ Thanh Niên khỏi gợi ý</button>
+      <button onclick="simB('age')">Đồng hồ +31 ngày → dọn 30 ngày</button>
+    </div>
+  </fieldset>
+  <fieldset><legend>Intent news.open (từ app khác)</legend>
+    <div class="nav">
+      <button onclick="intentOpen('ok')">id thật</button>
+      <button onclick="intentOpen('bad')">id lạ → NOT_FOUND</button>
+      <button onclick="intentOpen('schema')">payload sai → INTENT_REJECTED</button>
+    </div>
+  </fieldset>
+  <fieldset><legend>Trang app được phép truy cập (bản đồ grant — shell S4)</legend>
+    <ul class="logl" id="grants"></ul>
+  </fieldset>
+  <fieldset><legend>Lời gọi SDK (console S10)</legend><ol class="logl" id="log"></ol></fieldset>
+  <div class="muted">Prototype chốt IA + hình thức (PROTOTYPE.md §4). Token từ DESIGN-SYSTEM.md §2. Vòng 6 · 2026-10-09.</div>
+</div>
+</div>
+
+<script>
+// ---------- dữ liệu giả (PRD §7) — hôm nay = thứ Sáu 09/10/2026 ----------
+const NOW = new Date(2026, 9, 9, 9, 30);
+const CONFIG = { // sdk.info().config — từ app_configs trên server (registry set-config)
+  network: ['vnexpress.net', 'tuoitre.vn', 'thanhnien.vn', 'dantri.com.vn', 'vietnamnet.vn', 'laodong.vn'],
+  sources: [
+    { key: 'vnexpress', name: 'VnExpress', feed_url: 'https://vnexpress.net/rss/tin-moi-nhat.rss', host: 'vnexpress.net' },
+    { key: 'tuoitre', name: 'Tuổi Trẻ', feed_url: 'https://tuoitre.vn/rss/tin-moi-nhat.rss', host: 'tuoitre.vn' },
+    { key: 'thanhnien', name: 'Thanh Niên', feed_url: 'https://thanhnien.vn/rss/home.rss', host: 'thanhnien.vn' },
+    { key: 'dantri', name: 'Dân Trí', feed_url: 'https://dantri.com.vn/rss/home.rss', host: 'dantri.com.vn' },
+    { key: 'vietnamnet', name: 'VietnamNet', feed_url: 'https://vietnamnet.vn/rss/home.rss', host: 'vietnamnet.vn' },
+    { key: 'laodong', name: 'Lao Động', feed_url: 'https://laodong.vn/rss/home.rss', host: 'laodong.vn' },
+  ],
+};
+const MANIFEST_NET = []; // manifest.network của Đọc báo: rỗng
+let grants = { 'blog.example.dev': 'bạn cho phép 08/10' }; // core_net_grants của app vn.app.news (tenant này)
+
+const SRC0 = [
+  { id: 's1', name: 'VnExpress', feed_url: CONFIG.sources[0].feed_url, host: 'vnexpress.net', suggested_key: 'vnexpress', last: '09:12', err: null },
+  { id: 's2', name: 'Tuổi Trẻ', feed_url: CONFIG.sources[1].feed_url, host: 'tuoitre.vn', suggested_key: 'tuoitre', last: '09:12', err: null },
+  { id: 's3', name: 'Blog cá nhân', feed_url: 'https://blog.example.dev/feed.xml', host: 'blog.example.dev', suggested_key: null, last: '09:12', err: null },
+  { id: 's4', name: 'Thời tiết Hà Nội', feed_url: 'https://thoitiet.example/rss', host: 'thoitiet.example', suggested_key: null, last: '08/10 21:00', err: 'Không tải được (NET_ERROR) — máy chủ trả 503' },
+];
+const h = (n) => new Date(NOW.getTime() - n * 3600e3);
+const ITEMS0 = [
+  { id: 'a1', src: 's1', title: 'Giá xăng giảm lần thứ ba liên tiếp từ 15h chiều nay', sum: 'Liên Bộ Công Thương - Tài chính điều chỉnh giá bán lẻ xăng dầu, xăng RON95 giảm 420 đồng mỗi lít.', link: 'https://vnexpress.net/gia-xang-giam-4712345.html', at: h(1), read: null, saved: null, note: null, img: true },
+  { id: 'a2', src: 's2', title: 'TP.HCM thí điểm xe buýt điện tuyến trung tâm, miễn phí tháng đầu', sum: 'Sở Giao thông vận tải cho biết 20 xe buýt điện sẽ chạy tuyến Bến Thành - Thảo Điền từ 15/10.', link: 'https://tuoitre.vn/xe-buyt-dien-20261009.htm', at: h(2), read: null, saved: null, note: null, img: true },
+  { id: 'a3', src: 's3', title: 'Viết mini app chạy offline bằng SQLite WASM — bài học sau 3 tháng', sum: 'Ghi lại những cái bẫy khi đồng bộ hai chiều: id tất định, xoá mềm, và vì sao không tin đồng hồ máy khách.', link: 'https://blog.example.dev/mini-app-offline', at: h(3), read: null, saved: NOW, note: null, img: false },
+  { id: 'a4', src: 's1', title: 'Hà Nội se lạnh, nhiệt độ thấp nhất 19 độ vào sáng mai', sum: 'Không khí lạnh tăng cường khiến miền Bắc giảm nhiệt, trời nhiều mây, có mưa vài nơi.', link: 'https://vnexpress.net/ha-noi-se-lanh-4712300.html', at: h(4), read: h(3), saved: null, note: null, img: true },
+  { id: 'a5', src: 's2', title: 'Tuyển sinh đại học 2027: dự kiến bỏ xét tuyển sớm', sum: 'Bộ GD&ĐT lấy ý kiến dự thảo quy chế tuyển sinh, siết các phương thức xét tuyển bằng học bạ.', link: 'https://tuoitre.vn/tuyen-sinh-2027.htm', at: h(5), read: null, saved: NOW, note: 'n-1', img: false },
+  { id: 'a6', src: 's1', title: 'Đội tuyển Việt Nam chốt danh sách 26 cầu thủ dự vòng loại', sum: 'HLV trưởng gọi lại hai tiền vệ từng chấn thương, bỏ qua một số gương mặt ở V-League.', link: 'https://vnexpress.net/dtvn-26-cau-thu.html', at: h(20), read: h(19), saved: null, note: null, img: true },
+  { id: 'a7', src: 's3', title: 'Vì sao tôi bỏ FTS5 và dùng LIKE cho tìm kiếm ghi chú', sum: 'Khi hợp đồng bridge chỉ cho SELECT một bảng, giải pháp đơn giản thắng.', link: 'https://blog.example.dev/bo-fts5', at: h(26), read: null, saved: null, note: null, img: false },
+  { id: 'a8', src: 's2', title: 'Giá vé máy bay Tết 2027 bắt đầu mở bán, chặng TP.HCM - Hà Nội từ 3,2 triệu', sum: 'Các hãng mở bán sớm hơn mọi năm; vé rẻ tập trung ở chuyến bay đêm.', link: 'https://tuoitre.vn/ve-may-bay-tet-2027.htm', at: h(27), read: null, saved: null, note: null, img: true },
+  { id: 'a9', src: 's4', title: 'Dự báo thời tiết 10 ngày tới: mưa rào về chiều', sum: 'Nguồn thời tiết tự thêm — bài cũ còn trong cache.', link: 'https://thoitiet.example/10-ngay', at: h(40), read: null, saved: null, note: null, img: false },
+  { id: 'a10', src: 's0', title: 'Hướng dẫn tự làm đèn lồng Trung thu bằng giấy', sum: 'Bài của nguồn đã bỏ — còn giữ vì bạn đã lưu đọc sau.', link: 'https://khoahoc.tv/den-long', at: h(24 * 20), read: null, saved: h(24 * 19), note: null, img: false },
+  { id: 'a11', src: 's1', title: 'Bài quá 30 ngày chưa lưu — sẽ bị dọn khi mở app', sum: 'Mục này chỉ để thử dọn cache (công tắc Đồng hồ +31 ngày).', link: 'https://vnexpress.net/cu.html', at: h(24 * 29), read: h(24 * 28), saved: null, note: null, img: false },
+];
+let sources, items, S;
+function reset() {
+  sources = SRC0.map((s) => ({ ...s }));
+  items = ITEMS0.map((i) => ({ ...i }));
+  S = { screen: 'S19', net: 'online', ro: false, clean: false, noNote: false, noCal: false, filter: null, loading: false, lastRefresh: '09:12', removed: { s0: 'KhoaHoc.tv' }, sheet: null, dialog: null, browser: null };
+}
+reset();
+
+// ---------- tiện ích ----------
+const $ = (id) => document.getElementById(id);
+function log(m, bad) { const li = document.createElement('li'); li.textContent = m; if (bad) li.style.color = 'var(--color-danger)'; $('log').prepend(li); }
+let toastT;
+function toast(txt, bad, btn) {
+  $('toast').hidden = false; $('toast-txt').textContent = txt; $('toast-txt').style.color = bad ? 'var(--color-warning)' : '';
+  const b = $('toast-btn'); b.hidden = !btn; b.onclick = btn ? () => { $('toast').hidden = true; btn(); } : null;
+  clearTimeout(toastT); toastT = setTimeout(() => { $('toast').hidden = true; }, 4000);
+}
+function ago(d) { const m = Math.round((NOW - d) / 60000); if (m < 60) return `${m} phút trước`; const hh = Math.round(m / 60); if (hh < 24) return `${hh} giờ trước`; return `${Math.round(hh / 24)} ngày trước`; }
+function dayLabel(d) { const days = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']; const dd = new Date(d); dd.setHours(0, 0, 0, 0); const t = new Date(NOW); t.setHours(0, 0, 0, 0); const diff = Math.round((t - dd) / 864e5); if (diff === 0) return 'Hôm nay'; if (diff === 1) return 'Hôm qua'; return `${days[dd.getDay()]} ${String(dd.getDate()).padStart(2, '0')}/${String(dd.getMonth() + 1).padStart(2, '0')}`; }
+const srcName = (id) => sources.find((s) => s.id === id)?.name || (S.removed[id] ? `${S.removed[id]} · nguồn đã bỏ` : 'nguồn đã bỏ');
+function allowed(host) { return MANIFEST_NET.includes(host) || CONFIG.network.includes(host) || !!grants[host]; }
+
+// ---------- điều hướng ----------
+const ORDER = ['S19', 'S20', 'S21', 'S22', 'S23'];
+function go(s) { if (s === 'S22') return openAdd(); if (s === 'S23') return openActions(items[0].id); S.screen = s; location.hash = s; render(); }
+window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (['S19', 'S20', 'S21'].includes(s) && s !== S.screen) { S.screen = s; render(); } if (s === 'S22') openAdd(); if (s === 'S23') openActions(items[0].id); });
+
+function setNet(v) { S.net = v; log(`sync.status → ${v}`); render(); }
+function setClean(v) { S.clean = v; if (v) { sources = []; items = []; grants = {}; } else { reset(); } render(); }
+
+// ---------- render ----------
+function render() {
+  document.querySelectorAll('.screen').forEach((el) => el.classList.toggle('on', el.id === S.screen));
+  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.id === 'tab-' + S.screen));
+  $('nav').innerHTML = ORDER.map((s) => `<button class="${s === S.screen ? 'on' : ''}" onclick="go('${s}')">${s}</button>`).join('');
+  $('chip6').className = 'chip6 ' + (S.net === 'online' ? 'ok' : 'off'); $('chip6-txt').textContent = S.net === 'online' ? 'Đã đồng bộ' : 'Offline';
+  $('ro-banner').hidden = !S.ro;
+  const nSaved = items.filter((i) => i.saved).length; $('tab-saved').textContent = nSaved ? `Đọc sau · ${nSaved}` : 'Đọc sau';
+  $('btn-refresh').disabled = S.loading || !sources.length || S.ro;
+  $('btn-addsrc').disabled = S.ro;
+  $('grants').innerHTML = [...MANIFEST_NET.map((x) => `<li>${x} — theo app</li>`), ...CONFIG.network.map((x) => `<li>${x} — theo cấu hình</li>`), ...Object.entries(grants).map(([k, v]) => `<li>${k} — ${v} <button class="link" onclick="revoke('${k}')">Thu hồi</button></li>`)].join('') || '<li>(không có)</li>';
+  renderS19(); renderS20(); renderS21();
+  $('overlay').innerHTML = S.browser ? renderBrowser() : S.dialog ? renderDialog() : S.sheet ? renderSheet() : '';
+}
+function articleRow(i, ctx) {
+  const chips = [i.note ? `<span class="tagchip mini">Note</span>` : '', i.rem ? `<span class="tagchip mini">Nhắc ${i.rem}</span>` : ''].join('');
+  return `<div class="arow ${i.read ? 'read' : ''}" id="row-${i.id}">
+    <button class="mid" onclick="openArticle('${i.id}')">
+      <div class="ttl">${i.title}</div>
+      <div class="sub">${srcName(i.src)} · ${ago(i.at)}${chips}</div>
+      <div class="sum">${i.sum}</div>
+    </button>
+    ${i.img ? `<div class="thumb">ảnh</div>` : ''}
+    <div class="acts"><button class="ab ${i.saved ? 'on' : ''}" title="${i.saved ? 'Bỏ lưu' : 'Đọc sau'}" onclick="toggleSave('${i.id}')" ${S.ro ? 'disabled' : ''}>${i.saved ? '★' : '☆'}</button><button class="ab" title="Thêm hành động" onclick="openActions('${i.id}')">⋯</button></div>
+  </div>`;
+}
+function renderS19() {
+  const b = $('s19-body');
+  if (!sources.length) { b.innerHTML = `<div class="empty"><div class="big">▤</div><div>Chưa có nguồn nào — thêm báo bạn hay đọc</div><button class="btn" onclick="openAdd()" ${S.ro ? 'disabled' : ''}>Thêm nguồn</button></div>`; return; }
+  if (S.loading && !items.length) { b.innerHTML = `<div class="skel"><div></div><div></div><div></div></div>`; return; }
+  const live = items.filter((i) => !i.deleted && !S.removed[i.src] || (i.saved && !i.deleted));
+  const list = live.filter((i) => !S.filter || i.src === S.filter).sort((a, b2) => b2.at - a.at);
+  let html = `<div class="tags"><button class="tagchip ${!S.filter ? 'on' : ''}" onclick="S.filter=null;render()">Tất cả</button>${sources.map((s) => `<button class="tagchip ${S.filter === s.id ? 'on' : ''}" onclick="S.filter='${s.id}';render()">${s.name}</button>`).join('')}</div>`;
+  if (S.ro) html += `<div class="banner warn"><span>Chỉ đọc — không tải bài mới (READ_ONLY). Bài đã có và Đọc sau vẫn mở được.</span></div>`;
+  else if (S.net === 'offline') html += `<div class="banner warn"><span>Đang offline — hiện bài đã tải lúc ${S.lastRefresh}</span></div>`;
+  else html += `<div class="muted">Cập nhật lần cuối ${S.lastRefresh}${S.loading ? ' · đang tải…' : ''}</div>`;
+  const errSrc = sources.filter((s) => s.err);
+  if (errSrc.length && !S.filter) html += `<div class="banner warn"><span>${errSrc.length} nguồn không tải được — xem ở Nguồn</span><button class="btn" onclick="go('S21')">Xem</button></div>`;
+  if (!list.length) { html += S.filter ? `<div class="empty"><div class="big">▤</div><div>Không có bài nào của nguồn này</div></div>` : `<div class="empty"><div class="big">▤</div><div>Chưa tải được bài nào — bấm Làm mới khi có mạng</div><button class="btn" onclick="refresh()">Làm mới</button></div>`; b.innerHTML = html; return; }
+  let cur = '';
+  for (const i of list) { const d = dayLabel(i.at); if (d !== cur) { cur = d; html += `<div class="group">${d}</div>`; } html += articleRow(i, 'S19'); }
+  b.innerHTML = html;
+}
+function renderS20() {
+  const b = $('s20-body');
+  const list = items.filter((i) => i.saved && !i.deleted).sort((a, b2) => b2.saved - a.saved);
+  let html = S.net === 'offline' ? `<div class="banner info"><span>Offline — bài đọc sau vẫn mở được tiêu đề + tóm tắt; bấm bài sẽ cần mạng</span></div>` : `<div class="muted">Bài bạn lưu — chỉ tiêu đề, tóm tắt và liên kết. Không bao giờ bị dọn.</div>`;
+  if (!list.length) { b.innerHTML = `<div class="empty"><div class="big">☆</div><div>Chưa lưu bài nào — bấm ☆ Đọc sau ở một bài</div></div>`; return; }
+  html += `<div class="list">${list.map((i) => articleRow(i, 'S20')).join('')}</div>`;
+  b.innerHTML = html;
+}
+function renderS21() {
+  const b = $('s21-body');
+  if (!sources.length) { b.innerHTML = `<div class="empty"><div class="big">≡</div><div>Chưa có nguồn nào — thêm báo bạn hay đọc</div><button class="btn" onclick="openAdd()" ${S.ro ? 'disabled' : ''}>Thêm nguồn</button></div>`; return; }
+  b.innerHTML = `<div class="muted">${sources.length}/30 nguồn · bài giữ 30 ngày, bài đọc sau giữ mãi</div><div class="list">${sources.map((s) => {
+    const blocked = !allowed(s.host);
+    const st = s.busy ? 'busy' : blocked || s.err ? 'warn' : 'none';
+    const sub = blocked ? `Chưa được phép truy cập ${s.host} (NET_BLOCKED) — bấm để cho phép lại` : s.err ? s.err : `${s.host} · cập nhật ${s.last}`;
+    return `<div class="srow"><span class="st ${s.err || blocked ? 'warn' : s.busy ? 'busy' : ''}"></span><button class="mid" onclick="srcTap('${s.id}')"><span class="nm">${s.name}</span><span class="sub ${s.err || blocked ? 'err' : ''}">${sub}</span></button><button class="btn sec slim" onclick="removeSrc('${s.id}')" ${S.ro ? 'disabled' : ''}>Bỏ</button></div>`;
+  }).join('')}</div>`;
+}
+
+// ---------- S22 thêm nguồn (sheet C24) ----------
+let addState = { url: '', err: '', warn: '', busy: false };
+function openAdd() { if (S.ro) return toast('Chỉ đọc — không thêm được nguồn (READ_ONLY)', true); addState = { url: '', err: '', warn: '', busy: false }; S.sheet = 'add'; location.hash = 'S22'; render(); }
+function closeSheet() { S.sheet = null; location.hash = S.screen; render(); }
+function renderSheet() {
+  if (S.sheet === 'add') {
+    const have = new Set(sources.map((s) => s.feed_url));
+    return `<div class="scrim" onclick="if(event.target===this)closeSheet()"><div class="sheet">
+      <h3>Thêm nguồn</h3>
+      <div class="muted">Báo gợi ý (từ máy chủ — không cần cho phép thêm)</div>
+      <div class="list">${CONFIG.sources.map((c) => `<div class="srow"><span class="st none"></span><div class="mid"><span class="nm">${c.name}</span><span class="sub">${c.host}</span></div>${have.has(c.feed_url) ? `<span class="muted">Đã thêm</span>` : `<button class="btn sec slim ${addState.busyKey === c.key ? 'busy' : ''}" onclick="addSuggested('${c.key}')">Thêm</button>`}</div>`).join('')}</div>
+      <div><label class="lbl" for="addurl">Hoặc dán địa chỉ RSS / Atom</label>
+        <input class="input ${addState.err ? 'err' : ''}" id="addurl" placeholder="https://…/rss" value="${addState.url}" oninput="addState.url=this.value">
+        ${addState.err ? `<div class="errtxt">${addState.err}</div>` : ''}${addState.warn ? `<div class="warntxt">${addState.warn}</div>` : ''}
+        <div class="muted" style="margin-top:var(--space-xs)">Trang mới sẽ hỏi bạn cho phép Đọc báo truy cập trước khi tải.</div></div>
+      <button class="btn ${addState.busy ? 'busy' : ''}" onclick="addPasted()" ${addState.busy ? 'disabled' : ''}>${addState.busy ? 'Đang tải…' : 'Thêm nguồn'}</button>
+      <button class="btn sec" onclick="closeSheet()">Đóng</button>
+    </div></div>`;
+  }
+  if (S.sheet === 'actions') {
+    const i = items.find((x) => x.id === S.sheetItem);
+    return `<div class="scrim" onclick="if(event.target===this)closeSheet()"><div class="sheet">
+      <div><h3 style="font-size:var(--text-base)">${i.title}</h3><div class="muted">${srcName(i.src)} · ${ago(i.at)}</div></div>
+      <button class="lnk" onclick="closeSheet();openArticle('${i.id}')"><span>Mở bài</span><span class="val">↗</span></button>
+      <button class="lnk" onclick="toggleSave('${i.id}');closeSheet()" ${S.ro ? 'disabled' : ''}><span>${i.saved ? 'Bỏ lưu đọc sau' : 'Đọc sau'}</span><span class="val">${i.saved ? '★' : '☆'}</span></button>
+      <button class="lnk" onclick="saveNote('${i.id}')" ${S.ro ? 'disabled' : ''}><span>${i.note ? 'Đã lưu thành note' : 'Lưu thành note'}</span><span class="val">${i.note ? 'Mở' : '→ Ghi chú'}</span></button>
+      <button class="lnk" onclick="S.remind=!S.remind;render()" ${S.ro ? 'disabled' : ''}><span>Nhắc đọc</span><span class="val">→ Lịch</span></button>
+      ${S.remind ? `<div class="quick"><button class="btn sec slim" onclick="remind('${i.id}','Sau 1 giờ','10:30')">Sau 1 giờ</button><button class="btn sec slim" onclick="remind('${i.id}','Chiều nay','17:00')">Chiều nay</button><button class="btn sec slim" onclick="remind('${i.id}','Tối nay','20:00')">Tối nay</button><button class="btn sec slim" onclick="remind('${i.id}','Sáng mai','07:00')">Sáng mai</button></div><div class="muted">Bài sẽ tự được lưu Đọc sau để đọc offline khi Lịch nhắc.</div>` : ''}
+      <button class="lnk" onclick="toggleRead('${i.id}');closeSheet()" ${S.ro ? 'disabled' : ''}><span>${i.read ? 'Đánh dấu chưa đọc' : 'Đánh dấu đã đọc'}</span><span class="val">✓</span></button>
+      <button class="btn sec" onclick="closeSheet()">Đóng</button>
+    </div></div>`;
+  }
+  return '';
+}
+function openActions(id) { S.sheet = 'actions'; S.sheetItem = id; S.remind = false; location.hash = 'S23'; render(); }
+
+function addSuggested(key) {
+  const c = CONFIG.sources.find((x) => x.key === key);
+  log(`net.requestAccess({host:'${c.host}'}) → {granted:true} (host trong config.network — không hỏi)`);
+  if (S.net === 'offline') { log(`net.fetch(${c.feed_url}) → OFFLINE`, true); addState.err = `Không tải được ${c.name} — đang offline (OFFLINE). Chưa lưu.`; return render(); }
+  if (sources.length >= 30) { addState.err = 'Tối đa 30 nguồn (INVALID_REQUEST)'; return render(); }
+  addState.busyKey = key; render();
+  setTimeout(() => {
+    log(`net.fetch(${c.feed_url}) → 200, RSS 2.0, 12 bài`);
+    const id = 's' + Date.now();
+    sources.push({ id, name: c.name, feed_url: c.feed_url, host: c.host, suggested_key: key, last: '09:30', err: null });
+    for (let k = 0; k < 2; k++) items.push({ id: id + k, src: id, title: `${c.name}: bài mới ${k + 1} vừa tải về`, sum: 'Tóm tắt lấy từ thẻ description của feed, đã bỏ HTML.', link: `https://${c.host}/bai-${k}`, at: h(k + 0.5), read: null, saved: null, note: null, img: k === 0 });
+    addState.busyKey = null; toast(`Đã thêm ${c.name}`); render();
+  }, 700);
+}
+function addPasted() {
+  const url = addState.url.trim(); addState.err = ''; addState.warn = '';
+  if (!/^https?:\/\/[^/\s]+/.test(url)) { addState.err = 'Dán địa chỉ bắt đầu bằng http(s):// (INVALID_REQUEST)'; return render(); }
+  const host = new URL(url).host.toLowerCase();
+  if (sources.some((s) => s.feed_url === url)) { addState.err = 'Đã có nguồn này'; return render(); }
+  if (sources.length >= 30) { addState.err = 'Tối đa 30 nguồn (INVALID_REQUEST)'; return render(); }
+  if (!allowed(host)) {
+    log(`net.requestAccess({host:'${host}', reason:'Để tải tin từ ${host}'}) → shell hiện hộp thoại`);
+    S.dialog = { kind: 'host', host, onYes: () => { grants[host] = 'bạn cho phép 09/10'; log(`→ {granted:true} · core_net_grants += ${host}`); S.dialog = null; fetchPasted(url, host); }, onNo: () => { log(`→ {granted:false}`, true); S.dialog = null; addState.err = `Chưa cho phép truy cập ${host} (NET_BLOCKED). Chưa lưu.`; render(); } };
+    return render();
+  }
+  log(`net.requestAccess({host:'${host}'}) → {granted:true} (đã cho phép trước)`);
+  fetchPasted(url, host);
+}
+function fetchPasted(url, host) {
+  if (S.net === 'offline') { log(`net.fetch(${url}) → OFFLINE`, true); addState.err = 'Đang offline — không tải được (OFFLINE). Chưa lưu.'; return render(); }
+  addState.busy = true; render();
+  const kind = $('sim-feed').value;
+  setTimeout(() => {
+    addState.busy = false;
+    if (kind === 'html') { log(`net.fetch → 200 text/html`, true); addState.err = 'Không phải RSS/Atom — dán đúng địa chỉ feed (INVALID_REQUEST). Chưa lưu.'; return render(); }
+    if (kind === '404') { log(`net.fetch → 404`, true); addState.err = 'Trang trả về 404 (NET_ERROR). Chưa lưu.'; return render(); }
+    if (kind === 'big') { log(`net.fetch → thân > 5 MB`, true); addState.err = 'Feed quá lớn (NET_ERROR). Chưa lưu.'; return render(); }
+    if (kind === 'redirect') { log(`net.fetch → 301 → cdn.khac.vn → NET_BLOCKED (host chưa được phép)`, true); addState.err = `Trang chuyển sang cdn.khac.vn — thêm lại bằng địa chỉ đó (NET_BLOCKED). Chưa lưu.`; return render(); }
+    const n = kind === 'atom' ? 5 : 12; log(`net.fetch(${url}) → 200, ${kind === 'atom' ? 'Atom 1.0' : 'RSS 2.0'}, ${n} bài`);
+    const id = 's' + Date.now(); const name = host.replace(/^www\./, '');
+    sources.push({ id, name, feed_url: url, host, suggested_key: null, last: '09:30', err: null });
+    for (let k = 0; k < 2; k++) items.push({ id: id + k, src: id, title: `${name}: bài ${k + 1} từ feed vừa dán`, sum: 'Tóm tắt lấy từ feed; id bài tính từ feed_url|guid nên máy khác tải cũng ra cùng một dòng.', link: `https://${host}/bai-${k}`, at: h(k + 0.3), read: null, saved: null, note: null, img: false });
+    toast(`Đã thêm ${name} · tên sửa được ở Nguồn`); addState.url = ''; render();
+  }, 700);
+}
+function renderDialog() {
+  const d = S.dialog;
+  if (d.kind === 'host') return `<div class="scrim mid"><div class="dialog"><h3>Cho phép Đọc báo truy cập ${d.host}?</h3><div>Để tải tin từ ${d.host}</div><div class="sys">Hộp thoại của Mina (shell). Bạn có thể thu hồi trong Catalog › Đọc báo › Trang app được phép truy cập.</div><div class="col"><button class="btn" onclick="S.dialog.onYes()">Cho phép</button><button class="btn sec" onclick="S.dialog.onNo()">Không</button></div></div></div>`;
+  if (d.kind === 'confirm') return `<div class="scrim mid"><div class="dialog"><h3>${d.title}</h3><div>${d.body}</div><div class="col"><button class="btn ${d.danger ? 'danger' : ''}" onclick="S.dialog.onYes()">${d.yes}</button><button class="btn sec" onclick="S.dialog=null;render()">Huỷ</button></div></div></div>`;
+  if (d.kind === 'nf') return `<div class="scrim mid"><div class="dialog"><div class="empty err" style="padding:var(--space-md)"><div class="big">!</div><div>Không tìm thấy bài này (NOT_FOUND)</div><button class="btn sec" onclick="S.dialog=null;go('S19')">Về Tin mới</button></div></div></div>`;
+  return '';
+}
+
+// ---------- hành động trên bài ----------
+function openArticle(id) {
+  const i = items.find((x) => x.id === id);
+  log(`ui.openUrl('${i.link}') → trình duyệt trong app (Custom Tabs)`);
+  if (!i.read && !S.ro) { i.read = NOW; log(`db.execute UPDATE items SET read_at_ms`); }
+  S.browser = i; render();
+}
+function renderBrowser() { const i = S.browser; return `<div class="browser"><div class="urlbar"><button class="iconbtn" onclick="S.browser=null;render()" title="Đóng">×</button><span class="u">🔒 ${i.link}</span><span class="muted">⋮</span></div><div class="pg">${S.net === 'offline' ? `<div class="empty err"><div class="big">!</div><div>Không có kết nối Internet</div><div class="muted">Lỗi do trình duyệt hiện — không phải lỗi app</div></div>` : `<h3>${i.title}</h3><div class="muted">${srcName(i.src)} · trang gốc, mở trong Custom Tabs — tách khỏi WebView của app</div><div class="ph"></div><div class="ln"></div><div class="ln" style="width:90%"></div><div class="ln" style="width:70%"></div>`}</div></div>`; }
+function toggleSave(id) {
+  if (S.ro) return toast('Chỉ đọc (READ_ONLY)', true);
+  const i = items.find((x) => x.id === id); i.saved = i.saved ? null : NOW; log(`db.execute UPDATE items SET saved_at_ms=${i.saved ? 'now' : 'NULL'}`); toast(i.saved ? 'Đã lưu Đọc sau' : 'Đã bỏ lưu'); render();
+}
+function toggleRead(id) { const i = items.find((x) => x.id === id); i.read = i.read ? null : NOW; log(`db.execute UPDATE items SET read_at_ms`); render(); }
+function saveNote(id) {
+  const i = items.find((x) => x.id === id);
+  if (i.note) { log(`intent.send('note.open', {noteId:'${i.note}'}, {mode:'open'})`); closeSheet(); return toast('Mở Ghi chú ở note đã lưu'); }
+  if (S.noNote) { log(`intent.send('note.create') → INTENT_NO_HANDLER`, true); closeSheet(); return toast('Chưa cài Ghi chú — mở Catalog để cài rồi lưu lại (INTENT_NO_HANDLER)', true); }
+  const nid = 'n-' + Date.now(); log(`intent.send('note.create', {id:'${nid}', title, body: tóm tắt, url}) → handled`);
+  i.note = nid; log(`db.execute UPDATE items SET note_id`); closeSheet(); toast('Đã gửi tới Ghi chú · Mở?', false, () => toast('→ shell chuyển sang Ghi chú S12'));
+}
+function remind(id, label, hm) {
+  const i = items.find((x) => x.id === id);
+  if (S.noCal) { log(`intent.send('calendar.reminder.create') → INTENT_NO_HANDLER`, true); closeSheet(); return toast('Chưa cài Lịch — mở Catalog để cài rồi đặt lại (INTENT_NO_HANDLER)', true); }
+  log(`intent.send('calendar.reminder.create', {id: UUID, title, at:'2026-10-${label === 'Sáng mai' ? '10' : '09'}T${hm}', ref:{app:'vn.app.news', id:'${i.id}'}}) → handled`);
+  i.rem = hm; if (!i.saved) { i.saved = NOW; log(`db.execute UPDATE items SET saved_at_ms (tự lưu Đọc sau)`); }
+  closeSheet(); toast('Đã gửi tới Lịch · Mở?', false, () => toast('→ shell chuyển sang Lịch S17 (nguồn: vn.app.news)'));
+}
+function removeSrc(id) {
+  const s = sources.find((x) => x.id === id);
+  S.dialog = { kind: 'confirm', title: `Bỏ nguồn ${s.name}?`, body: 'Bài chưa lưu của nguồn này sẽ bị bỏ. Bài bạn đã lưu Đọc sau vẫn còn.', yes: 'Bỏ nguồn', onYes: () => { sources = sources.filter((x) => x.id !== id); S.removed[id] = s.name; items = items.filter((i) => i.src !== id || i.saved); log(`db.transaction: DELETE sources ${id}; DELETE items WHERE source_id=${id} AND saved_at_ms IS NULL (xoá mềm)`); S.dialog = null; if (S.filter === id) S.filter = null; toast(`Đã bỏ ${s.name}`); render(); } };
+  render();
+}
+function srcTap(id) {
+  const s = sources.find((x) => x.id === id);
+  if (!allowed(s.host)) { S.dialog = { kind: 'host', host: s.host, onYes: () => { grants[s.host] = 'bạn cho phép 09/10'; log(`net.requestAccess → granted · core_net_grants += ${s.host}`); S.dialog = null; s.err = null; toast(`Đã cho phép ${s.host} — bấm Làm mới`); render(); }, onNo: () => { S.dialog = null; render(); } }; return render(); }
+  if (s.err) { s.busy = true; render(); setTimeout(() => { s.busy = false; s.err = $('sim-feed').value === '404' ? 'Không tải được (NET_ERROR) — máy chủ trả 404' : null; s.last = '09:31'; toast(s.err ? 'Vẫn lỗi' : `Đã tải lại ${s.name}`); render(); }, 600); return; }
+  const name = prompt('Đổi tên nguồn', s.name); if (name) { s.name = name.slice(0, 100); log(`db.execute UPDATE sources SET name`); render(); }
+}
+function refresh() {
+  if (S.ro) return toast('Chỉ đọc — không tải bài mới (READ_ONLY)', true);
+  if (S.net === 'offline') { log(`net.fetch → OFFLINE (giữ danh sách cũ)`, true); return toast(`Đang offline — hiện bài đã tải lúc ${S.lastRefresh}`, true); }
+  S.loading = true; sources.forEach((s) => { s.busy = true; }); render();
+  setTimeout(() => {
+    S.loading = false; let n = 0;
+    sources.forEach((s) => { s.busy = false; if (!allowed(s.host)) { s.err = null; log(`net.fetch(${s.feed_url}) → NET_BLOCKED`, true); return; } if (s.id === 's4') { s.err = 'Không tải được (NET_ERROR) — máy chủ trả 503'; log(`net.fetch(${s.feed_url}) → 503`, true); return; } s.err = null; s.last = '09:31'; log(`net.fetch(${s.feed_url}) → 200`); if (n < 2) { items.push({ id: 'new' + Date.now() + n, src: s.id, title: `${s.name}: bài vừa về lúc 09:31`, sum: 'Bài mới — id tất định, có rồi thì chỉ cập nhật fetched_at_ms.', link: `https://${s.host}/moi-${n}`, at: NOW, read: null, saved: null, note: null, img: n === 0 }); n++; } });
+    S.lastRefresh = '09:31'; toast(n ? `Có ${n} bài mới` : 'Không có bài mới'); render();
+  }, 900);
+}
+function revoke(host) { delete grants[host]; log(`S4: thu hồi ${host} → core_net_grants xoá mềm → bản đồ grant cập nhật ngay`); toast(`Đã thu hồi ${host} — lần tải sau NET_BLOCKED`); render(); }
+
+// ---------- giả lập máy khác / máy chủ ----------
+function simB(k) {
+  if (k === 'save') { const i = items.find((x) => !x.saved); if (i) { i.saved = NOW; log(`sync ← máy B: items.saved_at_ms (${i.id})`); toast('Máy B vừa lưu một bài — đồng bộ về'); } }
+  if (k === 'read') { const i = items[1]; i.read = NOW; log(`sync ← máy B: items.read_at_ms (${i.id})`); toast('Máy B vừa đọc một bài'); }
+  if (k === 'revoke') { delete grants['blog.example.dev']; log(`sync ← máy B: core_net_grants blog.example.dev deleted_at → bản đồ cập nhật ≤ 5 s`); toast('Máy B thu hồi blog.example.dev — Nguồn sẽ báo NET_BLOCKED'); }
+  if (k === 'grant') { grants['khoahoc.tv'] = 'bạn cho phép (máy B) 09/10'; log(`sync ← máy B: core_net_grants += khoahoc.tv`); toast('Máy B cho phép khoahoc.tv — máy này không bị hỏi lại'); }
+  if (k === 'config') { CONFIG.sources = CONFIG.sources.filter((c) => c.key !== 'thanhnien'); CONFIG.network = CONFIG.network.filter((x) => x !== 'thanhnien.vn'); log(`catalog → platform_apps.config đổi → app nhận thông báo 'config'`); toast('Cấu hình máy chủ đổi: Thanh Niên rời danh sách gợi ý'); }
+  if (k === 'age') { const gone = items.filter((i) => (NOW - i.at) > 30 * 864e5 && !i.saved); items = items.filter((i) => !gone.includes(i)); log(`mở app: dọn ${gone.length} bài quá 30 ngày chưa lưu (xoá mềm); bài đọc sau giữ`); toast(`Đã dọn ${gone.length} bài quá 30 ngày — bài Đọc sau còn nguyên`); }
+  render();
+}
+function intentOpen(k) {
+  if (k === 'schema') { log(`news.open {item: 1} → INTENT_REJECTED (shell, thiếu itemId)`, true); return toast('Shell từ chối payload (INTENT_REJECTED)', true); }
+  if (k === 'bad') { log(`news.open {itemId: '00000000-…'} → NOT_FOUND`, true); S.dialog = { kind: 'nf' }; return render(); }
+  const i = items[0]; log(`news.open {itemId:'${i.id}'} → mở S19 cuộn tới bài`); go('S19'); setTimeout(() => { const r = $('row-' + i.id); if (r) { r.scrollIntoView({ block: 'center' }); r.style.outline = '2px solid var(--color-primary)'; setTimeout(() => { r.style.outline = ''; }, 1500); } }, 50);
+}
+
+const first = location.hash.slice(1); if (['S19', 'S20', 'S21'].includes(first)) S.screen = first;
+render();
+</script>
+</body>
+</html>
