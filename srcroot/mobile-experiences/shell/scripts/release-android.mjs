@@ -42,6 +42,12 @@ function fail(msg) {
   process.exit(1);
 }
 
+// Cờ dòng lệnh (không phụ thuộc shell — `VAR=x lệnh` không chạy trong cmd.exe/PowerShell): --supabase-url · --anon-key · --powersync-url
+for (const [flag, key] of [['--supabase-url', 'EXPO_PUBLIC_SUPABASE_URL'], ['--anon-key', 'EXPO_PUBLIC_SUPABASE_ANON_KEY'], ['--powersync-url', 'EXPO_PUBLIC_POWERSYNC_URL']]) {
+  const i = process.argv.indexOf(flag);
+  if (i >= 0 && process.argv[i + 1]) env[key] = process.argv[i + 1];
+}
+
 // ---------- 1. kiểm đầu vào ----------
 for (const k of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY', 'EXPO_PUBLIC_POWERSYNC_URL',
   'ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']) {

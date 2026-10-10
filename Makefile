@@ -101,7 +101,7 @@ keystore-local:
 	node $(SHELL_DIR)/scripts/new-keystore.mjs --path deployment/local/keys/mina-release-local.jks --env deployment/local/.env --cn "Mina Local"
 
 release-android-local:
-	cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$(SUPABASE_URL) EXPO_PUBLIC_SUPABASE_ANON_KEY=$(SUPABASE_ANON_KEY) EXPO_PUBLIC_POWERSYNC_URL=$(POWERSYNC_URL) node scripts/release-android.mjs --local
+	cd $(SHELL_DIR) && node scripts/release-android.mjs --local --supabase-url $(SUPABASE_URL) --anon-key $(SUPABASE_ANON_KEY) --powersync-url $(POWERSYNC_URL)
 
 # Production: biến ở deployment/prod/.env (không commit). Gỡ ANDROID_* của local trước để không lẫn khoá.
 keystore-prod:

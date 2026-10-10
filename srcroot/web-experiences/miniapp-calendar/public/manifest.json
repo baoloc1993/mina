@@ -1,7 +1,7 @@
 {
   "id": "vn.app.calendar",
   "name": "Lịch",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "sdk": "^0.1.1",
   "entry": "index.html",
   "icon": "icon.png",

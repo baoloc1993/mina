@@ -1,27 +1,100 @@
 // Khối giao diện dùng chung của Lịch (DESIGN-SYSTEM.md §4: C8 banner, C9 hộp thoại, C10 toast, C13 khuôn, C24 sheet).
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { errCode } from '../sdk';
 
 const p2 = (n: number) => String(n).padStart(2, '0');
-/** Ô chọn ngày hiển thị dd/mm/yyyy theo kiểu Việt Nam bất kể locale máy (ô date gốc nằm phủ trong suốt để vẫn mở bộ chọn của hệ thống). */
-export function DateField({ value, onChange, label, error, disabled }: { value: string; onChange: (v: string) => void; label: string; error?: boolean; disabled?: boolean }) {
-  const ok = /^\d{4}-\d{2}-\d{2}$/.test(value);
+// Ô chọn ngày / giờ bằng <select> (danh sách của hệ điều hành): chạy được trên MỌI WebView Android, giờ 24 h, tiếng Việt.
+// Bản cũ phủ một <input type="date|time"> trong suốt để mở bộ chọn gốc — trên một số máy/WebView chạm không mở gì (dogfood vòng 7,
+// máy thật của chủ dự án: "chọn ngày, chọn giờ không được") và bộ chọn gốc là AM/PM tiếng Anh, màu teal ngoài token.
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+const daysIn = (y: number, m: number) => new Date(y, m, 0).getDate();
+
+/** Thuần: tách "YYYY-MM-DD" → {y, m, d} (0 = chưa chọn). */
+export function parseDate(v: string): { y: number; m: number; d: number } {
+  const x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  return x ? { y: +x[1], m: +x[2], d: +x[3] } : { y: 0, m: 0, d: 0 };
+}
+/** Thuần: ghép lại; thiếu phần nào → '' (chưa đủ); ngày vượt số ngày của tháng thì kẹp (31/02 → 28/29). */
+export function joinDate(y: number, m: number, d: number): string {
+  if (!y || !m || !d) return '';
+  return `${y}-${p2(m)}-${p2(Math.min(d, daysIn(y, m)))}`;
+}
+export function parseTime(v: string): { h: number; n: number } | null {
+  const x = /^(\d{2}):(\d{2})$/.exec(v);
+  return x ? { h: +x[1], n: +x[2] } : null;
+}
+
+type FieldProps = { value: string; onChange: (v: string) => void; label: string; error?: boolean; disabled?: boolean };
+
+export function DateField({ value, onChange, label, error, disabled }: FieldProps) {
+  const [part, setPart] = useState(parseDate(value));
+  useEffect(() => setPart(parseDate(value)), [value]);
+  const nowY = new Date().getFullYear();
+  const years = range(Math.min(nowY - 1, part.y || nowY), Math.max(nowY + 8, part.y || nowY));
+  const days = part.y && part.m ? daysIn(part.y, part.m) : 31;
+  const set = (patch: Partial<{ y: number; m: number; d: number }>) => {
+    const next = { ...part, ...patch };
+    setPart(next);
+    onChange(joinDate(next.y, next.m, next.d));
+  };
   return (
-    <label className={`pickfield${error ? ' err' : ''}${disabled ? ' off' : ''}`}>
-      <span>{ok ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : 'Chọn ngày'}</span>
-      <input className="pf-native" type="date" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
-    </label>
+    <div className={`pickfield${error ? ' err' : ''}${disabled ? ' off' : ''}`} role="group" aria-label={label}>
+      <select className="pf-sel" aria-label={`${label} — ngày`} value={part.d || ''} disabled={disabled} onChange={(e) => set({ d: +e.target.value })}>
+        <option value="">Ngày</option>
+        {range(1, days).map((d) => (
+          <option key={d} value={d}>{d}</option>
+        ))}
+      </select>
+      <span className="pf-sep" aria-hidden="true">/</span>
+      <select className="pf-sel" aria-label={`${label} — tháng`} value={part.m || ''} disabled={disabled} onChange={(e) => set({ m: +e.target.value })}>
+        <option value="">Tháng</option>
+        {range(1, 12).map((m) => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+      <span className="pf-sep" aria-hidden="true">/</span>
+      <select className="pf-sel pf-year" aria-label={`${label} — năm`} value={part.y || ''} disabled={disabled} onChange={(e) => set({ y: +e.target.value })}>
+        <option value="">Năm</option>
+        {years.map((y) => (
+          <option key={y} value={y}>{y}</option>
+        ))}
+      </select>
+    </div>
   );
 }
 
-/** Ô chọn giờ hiển thị HH:mm (24 giờ) bất kể locale máy. */
-export function TimeField({ value, onChange, label, error, disabled }: { value: string; onChange: (v: string) => void; label: string; error?: boolean; disabled?: boolean }) {
-  const ok = /^\d{2}:\d{2}$/.test(value);
+/** Ô chọn giờ HH:mm (24 giờ). */
+export function TimeField({ value, onChange, label, error, disabled }: FieldProps) {
+  const [t, setT] = useState<{ h: number | null; n: number | null }>(() => {
+    const x = parseTime(value);
+    return x ? { h: x.h, n: x.n } : { h: null, n: null };
+  });
+  useEffect(() => {
+    const x = parseTime(value);
+    setT(x ? { h: x.h, n: x.n } : { h: null, n: null });
+  }, [value]);
+  const set = (patch: Partial<{ h: number | null; n: number | null }>) => {
+    const next = { ...t, ...patch };
+    setT(next);
+    onChange(next.h !== null && next.n !== null ? `${p2(next.h)}:${p2(next.n)}` : '');
+  };
+  const num = (v: string) => (v === '' ? null : +v);
   return (
-    <label className={`pickfield${error ? ' err' : ''}${disabled ? ' off' : ''}`}>
-      <span>{ok ? value : 'Chọn giờ'}</span>
-      <input className="pf-native" type="time" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
-    </label>
+    <div className={`pickfield${error ? ' err' : ''}${disabled ? ' off' : ''}`} role="group" aria-label={label}>
+      <select className="pf-sel" aria-label={`${label} — giờ`} value={t.h ?? ''} disabled={disabled} onChange={(e) => set({ h: num(e.target.value), n: t.n ?? 0 })}>
+        <option value="">Giờ</option>
+        {range(0, 23).map((h) => (
+          <option key={h} value={h}>{p2(h)}</option>
+        ))}
+      </select>
+      <span className="pf-sep" aria-hidden="true">:</span>
+      <select className="pf-sel" aria-label={`${label} — phút`} value={t.n ?? ''} disabled={disabled} onChange={(e) => set({ n: num(e.target.value), h: t.h ?? new Date().getHours() })}>
+        <option value="">Phút</option>
+        {range(0, 59).map((n) => (
+          <option key={n} value={n}>{p2(n)}</option>
+        ))}
+      </select>
+    </div>
   );
 }
 void p2;
