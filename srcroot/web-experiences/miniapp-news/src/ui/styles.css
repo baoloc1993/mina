@@ -204,3 +204,9 @@ input { -webkit-user-select: text; user-select: text; }
 .tabs button { white-space: nowrap; }
 .srow .sub { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
 .srow .mid { min-width: 0; }
+
+/* Dogfood vòng 7 (picky): placeholder + con trỏ chỉ dùng token; tap-highlight trong suốt; nút đang xử lý không mờ (chữ đọc được, 4,5:1) */
+* { -webkit-tap-highlight-color: transparent; }
+input, textarea { caret-color: var(--color-primary); }
+input::placeholder, textarea::placeholder { color: var(--color-text-muted); opacity: 1; }
+.btn.busy[disabled] { opacity: 1; }

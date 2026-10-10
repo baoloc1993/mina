@@ -2,21 +2,11 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import type { SyncState } from '../bridge/types';
-import { Txt, toneColor, type Tone } from './Txt';
-import { chipHeight, color, dotSize, radius, space, stroke, tapMin } from './theme';
+import { chipInfo } from './chipInfo';
+import { Txt, toneColor } from './Txt';
 
-export function chipInfo(state: SyncState, rejected: number): { tone: Tone; text: string } {
-  switch (state) {
-    case 'online':
-      return { tone: 'success', text: 'Đã đồng bộ' };
-    case 'syncing':
-      return { tone: 'primary', text: 'Đang đồng bộ…' };
-    case 'offline':
-      return { tone: 'warning', text: 'Offline' };
-    case 'error':
-      return { tone: 'danger', text: `${Math.max(rejected, 1)} bị từ chối` };
-  }
-}
+export { chipInfo };
+import { chipHeight, color, dotSize, radius, space, stroke, tapMin } from './theme';
 
 interface Props {
   state: SyncState;

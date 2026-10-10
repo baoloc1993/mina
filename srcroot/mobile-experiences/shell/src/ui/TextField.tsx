@@ -38,6 +38,8 @@ export function TextField({ label, value, onChangeText, placeholder, error, inva
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={color['text-muted']}
+        selectionColor={color.primary}
+        cursorColor={color.primary}
         editable={!disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

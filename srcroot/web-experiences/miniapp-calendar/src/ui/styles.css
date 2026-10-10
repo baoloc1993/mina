@@ -171,3 +171,9 @@ button.tagchip::after { content: ""; position: absolute; left: 0; right: 0; top:
 .snz { font-size: var(--text-sm); color: var(--color-warning); font-weight: 600; }
 .cell.out b { color: var(--color-text-muted); font-weight: 400; }
 .dialog, .dialog .muted, .sheet, .big-ttl { overflow-wrap: anywhere; }
+
+/* Dogfood vòng 7 (picky): placeholder + con trỏ chỉ dùng token; tap-highlight trong suốt; nút đang xử lý không mờ (chữ đọc được, 4,5:1) */
+* { -webkit-tap-highlight-color: transparent; }
+input, textarea { caret-color: var(--color-primary); }
+input::placeholder, textarea::placeholder { color: var(--color-text-muted); opacity: 1; }
+.btn.busy[disabled] { opacity: 1; }

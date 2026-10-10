@@ -1,6 +1,6 @@
 {
   "name": "@platform/miniapp-news",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "description": "Mini app Đọc báo (vn.app.news) — vòng 6: nguồn RSS/Atom, đọc sau offline, lưu thành note, nhắc đọc, domain do người dùng cho phép",
   "type": "module",

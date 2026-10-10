@@ -46,6 +46,16 @@ if (!existsSync(join(androidDir, 'app', 'build.gradle'))) {
   fail('chưa có android/ — chạy `npx expo prebuild --platform android` một lần rồi chạy lại');
 }
 
+// ---------- 1b. đồng bộ android/ với app.json + assets (icon, tên, quyền) ----------
+// `expo prebuild` (không --clean) ghi đè phần do Expo sinh và GIỮ file ngoài mẫu; bước vá bên dưới chạy lại sau đó (marker mất khi gradle bị sinh lại).
+{
+  const isWinPre = process.platform === 'win32';
+  const pre = spawnSync(isWinPre ? 'npx.cmd' : 'npx', ['expo', 'prebuild', '--platform', 'android', '--no-install'], {
+    cwd: shellDir, stdio: 'inherit', shell: isWinPre, env: { ...env, EXPO_NO_TELEMETRY: '1', CI: '1' },
+  });
+  if (pre.status !== 0) fail(`expo prebuild lỗi (mã ${pre.status})`);
+}
+
 // ---------- 2. vá build.gradle một lần ----------
 const gradlePath = join(androidDir, 'app', 'build.gradle');
 let gradle = readFileSync(gradlePath, 'utf8');

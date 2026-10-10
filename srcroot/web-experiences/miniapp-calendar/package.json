@@ -1,6 +1,6 @@
 {
   "name": "@platform/miniapp-calendar",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Mini app Lịch (vn.app.calendar) — vòng 5: sự kiện + lời nhắc, lặp dương/âm lịch, thông báo offline, intent calendar.*",
   "type": "module",
