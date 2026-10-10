@@ -8,7 +8,7 @@
 # Artifact để CHẠY nằm ở deployment/ (deployment/README.md). Giá trị biến môi trường nằm ở
 # deployment/local/.env (không commit) — make nạp vào môi trường, không in ra.
 
-.PHONY: help dev check test accept migrate deploy doctor gate mock seed
+.PHONY: help dev check test accept migrate deploy doctor gate mock seed release-android release-android-local keystore-local keystore-prod
 
 PYTHON ?= python
 export PYTHONUTF8 = 1
@@ -90,6 +90,23 @@ accept:
 	$(NPM_BE) run accept:notes
 	$(NPM_BE) run accept:calendar
 	$(NPM_BE) run accept:news
+	$(NPM_BE) run accept:ops
+
+# --- vòng 7: APK release ký thật ---
+# Local: backend docker (cleartext), keystore riêng ở deployment/local/keys (ANDROID_KEYSTORE_* trong deployment/local/.env).
+keystore-local:
+	node $(SHELL_DIR)/scripts/new-keystore.mjs --path deployment/local/keys/mina-release-local.jks --env deployment/local/.env --cn "Mina Local"
+
+release-android-local:
+	cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$(SUPABASE_URL) EXPO_PUBLIC_SUPABASE_ANON_KEY=$(SUPABASE_ANON_KEY) EXPO_PUBLIC_POWERSYNC_URL=$(POWERSYNC_URL) node scripts/release-android.mjs --local
+
+# Production: biến ở deployment/prod/.env (không commit). Gỡ ANDROID_* của local trước để không lẫn khoá.
+keystore-prod:
+	node $(SHELL_DIR)/scripts/new-keystore.mjs --path deployment/prod/keys/mina-release.jks --env deployment/prod/.env --cn "Mina Platform"
+
+release-android:
+	@test -f deployment/prod/.env || (echo "Thiếu deployment/prod/.env (xem deployment/prod/README.md)" && exit 1)
+	unset ANDROID_KEYSTORE_PATH ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; set -a; . deployment/prod/.env; set +a; cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$$SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY=$$SUPABASE_ANON_KEY EXPO_PUBLIC_POWERSYNC_URL=$$POWERSYNC_URL node scripts/release-android.mjs
 
 migrate:
 	$(SUPABASE) migration up --local
