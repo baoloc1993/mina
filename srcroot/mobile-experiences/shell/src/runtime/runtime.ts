@@ -25,7 +25,7 @@ import {
 import * as api from '../auth/api';
 import { UnauthorizedError } from '../auth/api';
 import { EntitlementStore, type EntitlementCache } from '../entitlement/entitlement';
-import { cancelAllOf, cancelNotification, listNotifications, onNotificationTap, restoreNotifications, scheduleNotification } from '../native/notifications';
+import { cancelAllOf, cancelNotification, listNotifications, onNotificationTap, restoreNotifications, scheduleNotification, takeLastNotificationTap } from '../native/notifications';
 import { APPS_DIR, createClock, downloadBytes, FILES_DIR, newScratch, nativeFs, uuid } from '../native/adapters';
 import { FileStore } from '../native/fileStore';
 import { nativeNetFetch } from '../native/netFetch';
@@ -200,10 +200,14 @@ export class RuntimeImpl implements Runtime {
       this.set({ boot: 'ready' });
       this.tickTimer = setInterval(() => void this.tick(), 1000);
       AppState.addEventListener('change', (st) => {
-        if (st === 'active' && this.s.session) void this.refreshCatalog();
+        if (st === 'active' && this.s.session) {
+          void this.refreshCatalog();
+          void this.deliverLastNotificationTap();
+        }
       });
       onNotificationTap(({ appId, ref }) => void this.openFromNotification(appId, ref));
       void restoreNotifications(this.db).catch(() => undefined);
+      void this.deliverLastNotificationTap();
     } catch (e) {
       console.log('[rt] init failed', (e as Error).message);
       this.set({ boot: 'error', bootError: (e as Error).message });
@@ -660,6 +664,12 @@ export class RuntimeImpl implements Runtime {
       this.channels.get(appId)?.emit('intent', { type: r.type, version: r.version, payload: JSON.parse(r.payload), from: r.from_app });
       await this.db.execute('DELETE FROM platform_intents WHERE id = ?', [r.id]);
     }
+  }
+
+  /** Giao lần bấm thông báo mà listener không bắt được (shell bị kill / vừa mở nguội) — mỗi lần bấm chỉ giao một lần. */
+  private async deliverLastNotificationTap(): Promise<void> {
+    const t = await takeLastNotificationTap();
+    if (t) await this.openFromNotification(t.appId, t.ref);
   }
 
   private async openFromNotification(appId: string, ref: string | null): Promise<void> {

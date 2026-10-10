@@ -101,7 +101,11 @@ export async function cancelAllOf(db: AbstractPowerSyncDatabase, appId: string):
   await db.execute('DELETE FROM platform_notifications WHERE app_id = ?', [appId]);
 }
 
-/** Sau khi mở shell: đặt lại thông báo tương lai còn thiếu (vd sau khi máy khởi động lại). */
+/**
+ * Sau khi mở shell: ĐẶT LẠI mọi thông báo tương lai. Không được bỏ qua dòng mà expo còn "nhớ" (`getAllScheduledNotificationsAsync`):
+ * `force-stop` xoá alarm của hệ điều hành nhưng danh sách của expo vẫn còn dòng ấy ⇒ bản cũ coi là "đang sống" và KHÔNG đặt lại,
+ * lời nhắc im lặng (dogfood vòng 7). Huỷ bản cũ (nếu còn) rồi đặt lại là idempotent.
+ */
 export async function restoreNotifications(db: AbstractPowerSyncDatabase): Promise<void> {
   const rows = await db.getAll<{ id: string; app_id: string; at: number; title: string; body: string; ref: string | null; os_id: string }>(
     'SELECT * FROM platform_notifications WHERE at > ?',
@@ -110,19 +114,42 @@ export async function restoreNotifications(db: AbstractPowerSyncDatabase): Promi
   await db.execute('DELETE FROM platform_notifications WHERE at < ?', [Date.now() - 86_400_000]);
   if (!rows.length) return;
   await init();
-  const live = new Set((await Notifications.getAllScheduledNotificationsAsync()).map((n) => n.identifier));
   for (const r of rows) {
-    if (live.has(r.os_id)) continue;
+    if (r.os_id) await Notifications.cancelScheduledNotificationAsync(r.os_id).catch(() => undefined);
     const osId = await osSchedule(r.app_id, { id: r.id.slice(r.app_id.length + 1), at: r.at, title: r.title, body: r.body, ref: r.ref });
     await db.execute('UPDATE platform_notifications SET os_id = ? WHERE id = ?', [osId, r.id]);
   }
 }
 
-/** Người dùng bấm thông báo ⇒ gọi `cb({appId, ref})` (mở app + giao `ref`). */
-export function onNotificationTap(cb: (info: { appId: string; ref: string | null }) => void): () => void {
+let lastTapKey = '';
+type TapInfo = { appId: string; ref: string | null };
+const tapKey = (r: Notifications.NotificationResponse) => `${r.notification.request.identifier}|${r.notification.date}|${r.actionIdentifier}`;
+function tapOf(r: Notifications.NotificationResponse): TapInfo | null {
+  const d = r.notification.request.content.data as { appId?: string; ref?: string | null };
+  return d?.appId ? { appId: d.appId, ref: d.ref ?? null } : null;
+}
+
+/** Người dùng bấm thông báo ⇒ gọi `cb({appId, ref})` (mở app + giao `ref`). Mỗi lần bấm chỉ giao MỘT lần (khoá theo id + giờ + hành động). */
+export function onNotificationTap(cb: (info: TapInfo) => void): () => void {
   const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
-    const d = resp.notification.request.content.data as { appId?: string; ref?: string | null };
-    if (d?.appId) cb({ appId: d.appId, ref: d.ref ?? null });
+    const k = tapKey(resp);
+    if (k === lastTapKey) return;
+    lastTapKey = k;
+    const t = tapOf(resp);
+    if (t) cb(t);
   });
   return () => sub.remove();
+}
+
+/**
+ * Lần bấm đã MỞ shell từ trạng thái chết: phản hồi tới trước khi listener được gắn nên listener không thấy (dogfood vòng 7 — bấm thông báo
+ * khi shell đã bị kill chỉ ra launcher). Hỏi `getLastNotificationResponse` sau khi khởi động xong; đã giao rồi (cùng khoá) thì bỏ qua.
+ */
+export async function takeLastNotificationTap(): Promise<TapInfo | null> {
+  const resp = await Notifications.getLastNotificationResponseAsync().catch(() => null);
+  if (!resp) return null;
+  const k = tapKey(resp);
+  if (k === lastTapKey) return null;
+  lastTapKey = k;
+  return tapOf(resp);
 }
