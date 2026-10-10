@@ -1,8 +1,8 @@
 {
   "id": "vn.app.news",
   "name": "Đọc báo",
-  "version": "0.1.6",
-  "sdk": "^0.1.2",
+  "version": "0.1.9",
+  "sdk": "^0.1.3",
   "entry": "index.html",
   "icon": "icon.png",
   "description": "Đọc tin từ đúng những báo bạn chọn: thêm nguồn RSS bất kỳ, lưu đọc sau để xem cả khi mất mạng, lưu bài thành ghi chú hoặc đặt nhắc đọc.",

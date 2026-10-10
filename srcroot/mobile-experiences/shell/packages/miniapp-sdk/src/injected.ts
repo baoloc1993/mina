@@ -1,4 +1,4 @@
-// SDK v0 (@platform/miniapp-sdk 0.1.2) — chuỗi JS ES5 được chèn vào <head> của mini app TRƯỚC script của app.
+// SDK v0 (@platform/miniapp-sdk 0.1.3) — chuỗi JS ES5 được chèn vào <head> của mini app TRƯỚC script của app.
 // Dùng chung cho shell (WebView Android) và mock SDK (iframe trên trình duyệt) — một nguồn, hai nơi chạy.
 // Quy tắc viết chuỗi này: KHÔNG dùng dấu huyền, "${", hay dấu gạch chéo ngược (template literal của TS sẽ diễn giải chúng).
 //

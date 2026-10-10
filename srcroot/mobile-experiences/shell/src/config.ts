@@ -5,7 +5,10 @@ function need(name: string, v: string | undefined): string {
   return v;
 }
 
+import { parseProviders } from './auth/providers';
+
 export const config = {
+  oauthProviders: parseProviders(process.env.EXPO_PUBLIC_OAUTH_PROVIDERS),
   supabaseUrl: need('EXPO_PUBLIC_SUPABASE_URL', process.env.EXPO_PUBLIC_SUPABASE_URL),
   supabaseAnonKey: need('EXPO_PUBLIC_SUPABASE_ANON_KEY', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   powersyncUrl: need('EXPO_PUBLIC_POWERSYNC_URL', process.env.EXPO_PUBLIC_POWERSYNC_URL),

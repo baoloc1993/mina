@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { oauth, requestOtp, verifyOtp, type Provider } from '../auth/supabase';
 import { validateCode, validateEmail, viAuthError } from '../auth/messages';
+import { config } from '../config';
 import { runtime, useRuntime } from '../runtime';
 import { Banner } from '../ui/Banner';
 import { Button } from '../ui/Button';
@@ -238,32 +239,40 @@ export function LoginScreen() {
           </Txt>
         ) : null}
 
-        <Txt tone="muted" center>
-          hoặc
-        </Txt>
-        <View style={styles.group}>
-          <Button
-            title="Tiếp tục với Google"
-            variant="secondary"
-            busy={providerBusy && providerName === 'google'}
-            busyTitle="Đang mở Google…"
-            disabled={providerBusy || sending || verifying}
-            onPress={() => void social('google')}
-          />
-          <Button
-            title="Tiếp tục với Apple"
-            variant="secondary"
-            busy={providerBusy && providerName === 'apple'}
-            busyTitle="Đang mở Apple…"
-            disabled={providerBusy || sending || verifying}
-            onPress={() => void social('apple')}
-          />
-          {oauthErr ? (
-            <Txt size="sm" tone="danger" accessibilityLiveRegion="polite">
-              {oauthErr}
+        {config.oauthProviders.length > 0 ? (
+          <>
+            <Txt tone="muted" center>
+              hoặc
             </Txt>
-          ) : null}
-        </View>
+            <View style={styles.group}>
+              {config.oauthProviders.includes('google') ? (
+                <Button
+                  title="Tiếp tục với Google"
+                  variant="secondary"
+                  busy={providerBusy && providerName === 'google'}
+                  busyTitle="Đang mở Google…"
+                  disabled={providerBusy || sending || verifying}
+                  onPress={() => void social('google')}
+                />
+              ) : null}
+              {config.oauthProviders.includes('apple') ? (
+                <Button
+                  title="Tiếp tục với Apple"
+                  variant="secondary"
+                  busy={providerBusy && providerName === 'apple'}
+                  busyTitle="Đang mở Apple…"
+                  disabled={providerBusy || sending || verifying}
+                  onPress={() => void social('apple')}
+                />
+              ) : null}
+              {oauthErr ? (
+                <Txt size="sm" tone="danger" accessibilityLiveRegion="polite">
+                  {oauthErr}
+                </Txt>
+              ) : null}
+            </View>
+          </>
+        ) : null}
         {offline ? <Banner tone="warning" text="Đang offline — cần mạng để đăng nhập" /> : null}
       </Body>
 

@@ -221,7 +221,11 @@ describe('sdk / auth', () => {
   });
   test('sdk.info báo readOnly', async () => {
     const { call } = setup([], {}, true);
-    expect((await call('sdk.info')).result).toMatchObject({ appId: 'vn.app.hello', sdkVersion: '0.1.2', readOnly: true });
+    expect((await call('sdk.info')).result).toMatchObject({ appId: 'vn.app.hello', sdkVersion: '0.1.3', readOnly: true });
+  });
+  test('sdk.info (SDK 0.1.3) trả tenantId của phiên — muối cho id tất định, không do app khai', async () => {
+    const { call } = setup([]);
+    expect((await call('sdk.info')).result).toMatchObject({ tenantId: 'T1' });
   });
   test('auth.getAppToken dùng app_id của manifest, bỏ qua tham số app truyền', async () => {
     const { call, fake } = setup();
@@ -250,7 +254,7 @@ function setup6(opts: Parameters<typeof makeFakeHost>[0] = {}, scopes = W6, over
 
 describe('sdk.info().config (AC-6)', () => {
   test('trả đúng object cấu hình từ Host; chưa có → {}', async () => {
-    expect((await setup6({ config: { network: ['a.vn'], sources: [1] } }).call('sdk.info')).result).toMatchObject({ sdkVersion: '0.1.2', config: { network: ['a.vn'], sources: [1] } });
+    expect((await setup6({ config: { network: ['a.vn'], sources: [1] } }).call('sdk.info')).result).toMatchObject({ sdkVersion: '0.1.3', config: { network: ['a.vn'], sources: [1] } });
     expect((await setup6().call('sdk.info')).result).toMatchObject({ config: {} });
   });
 });

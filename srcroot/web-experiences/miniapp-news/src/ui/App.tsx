@@ -247,7 +247,8 @@ export function App({ sdk }: { sdk: Sdk }) {
         const ae = toAppError(e, '');
         setAddErr(ae);
         // Sheet đã đóng trong lúc đang tải (người dùng vội): báo kết quả bằng toast
-        if (sheetRef.current?.k !== 'add') showToast({ msg: `${ae.message} (${ae.code})`, err: true });
+        // Thêm từ danh sách gợi ý: lỗi hiện cuối sheet (dưới ô dán URL), ngoài tầm nhìn — dogfood vòng 7 → báo thêm bằng toast sát chỗ vừa bấm.
+        if (sheetRef.current?.k !== 'add' || opt.suggestedKey) showToast({ msg: `${ae.message} (${ae.code})`, err: true });
       } finally {
         setAddBusy(null);
       }

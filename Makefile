@@ -57,7 +57,7 @@ dev:
 	@echo "Backend lên: API http://127.0.0.1:54321 · PowerSync http://127.0.0.1:8090 · mail OTP http://127.0.0.1:54324"
 	@echo "Dữ liệu mẫu + registry (hello, app riêng): python deployment/local/seed/seed.py   ·   sau khi sửa Edge Function: docker restart supabase_edge_runtime_platform-backend"
 	@echo "Shell: build dev bản Android một lần: (cd $(SHELL_DIR) && npx expo run:android), sau đó Metro:"
-	cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$(SUPABASE_URL) EXPO_PUBLIC_SUPABASE_ANON_KEY=$(SUPABASE_ANON_KEY) EXPO_PUBLIC_POWERSYNC_URL=$(POWERSYNC_URL) npx expo start --dev-client
+	cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$(SUPABASE_URL) EXPO_PUBLIC_SUPABASE_ANON_KEY=$(SUPABASE_ANON_KEY) EXPO_PUBLIC_POWERSYNC_URL=$(POWERSYNC_URL) EXPO_PUBLIC_OAUTH_PROVIDERS=google,apple npx expo start --dev-client
 
 check:
 	cd $(SHELL_DIR) && npm --silent run build:tokens && npm --silent run build:fixtures

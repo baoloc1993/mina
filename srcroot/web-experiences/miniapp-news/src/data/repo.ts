@@ -129,7 +129,10 @@ interface Resolved {
  * thử id kế (một dòng đã xoá không hồi sinh được — DECISIONS vòng 6), chưa có ⇒ `new`. Cả ba id đã xoá ⇒ `blocked` (bỏ qua bài).
  */
 export async function resolveIds(sdk: Sdk, feedUrl: string, items: ParsedItem[]): Promise<Resolved[]> {
-  const cand = items.map((it) => Array.from({ length: ID_GENERATIONS }, (_, g) => itemId(feedUrl, it.guid, g)));
+  // Muối = tenant (SDK 0.1.3): khoá chính `items.id` là toàn cục nên hai tenant đọc cùng một báo KHÔNG được ra cùng id
+  // (id thuộc tenant khác → server từ chối FORBIDDEN). Mọi máy của một tenant vẫn ra cùng id.
+  const tenantId = (await sdk.sdk.info()).tenantId ?? '';
+  const cand = items.map((it) => Array.from({ length: ID_GENERATIONS }, (_, g) => itemId(tenantId, feedUrl, it.guid, g)));
   const all = [...new Set(cand.flat())];
   const found = new Map<string, { id: string; title: string; summary: string; fetched_at_ms: number; source_id: string; deleted_at: string | null }>();
   for (let i = 0; i < all.length; i += 90) {

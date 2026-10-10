@@ -1,4 +1,4 @@
-// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.2, ARCHITECTURE.md §5).
+// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.3, ARCHITECTURE.md §5).
 // THUẦN TS: shell và mock SDK trên trình duyệt chạy CÙNG mã này, mọi hiệu ứng đi qua `Host`.
 // Thứ tự kiểm (bất biến): request hợp lệ → method có thật → scope → chỉ đọc → tham số → thực thi.
 // Từ chối ở bước nào thì KHÔNG có tác dụng phụ (Host không được gọi lần nào) — bảng kỳ vọng `matrix.ts` canh điều này.
@@ -18,7 +18,7 @@ import {
 export * from './types';
 export { SqlRejected } from './sqlGuard';
 
-export const SDK_VERSION = '0.1.2';
+export const SDK_VERSION = '0.1.3';
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_INTENT_BYTES = 64 * 1024;
 export const MAX_NET_BODY_BYTES = 5 * 1024 * 1024;
@@ -164,6 +164,8 @@ const METHODS: Record<string, MethodDef> = {
         platform: i.platform,
         readOnly: ctx.host.isReadOnly(),
         config: ctx.host.appConfig(),
+        // SDK 0.1.3: id tenant đang đăng nhập (chuỗi UUID, cùng giá trị trên mọi máy của tenant) — để app dựng id tất định KHÔNG đụng id của tenant khác.
+        tenantId: ctx.host.tenantId(),
       };
     },
   },

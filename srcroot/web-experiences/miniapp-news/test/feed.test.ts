@@ -142,20 +142,27 @@ describe('parseDate', () => {
 
 describe('itemId tất định', () => {
   const U = 'https://vnexpress.net/rss/tin-moi-nhat.rss';
+  const T = '11111111-1111-4111-8111-111111111111';
+  test('KHÁC tenant → KHÁC id cho cùng (feed, guid): id là khoá chính toàn cục, tenant B không được đụng id của tenant A (dogfood vòng 7)', () => {
+    const other = '22222222-2222-4222-8222-222222222222';
+    expect(itemId(other, U, 'g1')).not.toBe(itemId(T, U, 'g1'));
+    expect(itemId(other, U, 'g1', 1)).not.toBe(itemId(T, U, 'g1', 1));
+    expect(itemId(T, U, 'g1')).toBe(itemId(T, U, 'g1')); // hai máy cùng tenant vẫn hội tụ
+  });
   test('cùng (feed, guid) → cùng id UUID v4; khác guid/feed → khác id', () => {
-    const a = itemId(U, 'g1');
-    expect(a).toBe(itemId(U, 'g1'));
+    const a = itemId(T, U, 'g1');
+    expect(a).toBe(itemId(T, U, 'g1'));
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(itemId(U, 'g2')).not.toBe(a);
-    expect(itemId('https://khac.vn/rss', 'g1')).not.toBe(a);
+    expect(itemId(T, U, 'g2')).not.toBe(a);
+    expect(itemId(T, 'https://khac.vn/rss', 'g1')).not.toBe(a);
   });
   test('thế hệ id kế tiếp (gen) khác id gốc nhưng cũng tất định', () => {
-    const ids = [0, 1, 2].map((g) => itemId(U, 'g1', g));
+    const ids = [0, 1, 2].map((g) => itemId(T, U, 'g1', g));
     expect(new Set(ids).size).toBe(3);
-    expect(ids[1]).toBe(itemId(U, 'g1', 1));
+    expect(ids[1]).toBe(itemId(T, U, 'g1', 1));
   });
   test('1000 guid khác nhau không va chạm', () => {
-    const set = new Set(Array.from({ length: 1000 }, (_, i) => itemId(U, `guid-${i}`)));
+    const set = new Set(Array.from({ length: 1000 }, (_, i) => itemId(T, U, `guid-${i}`)));
     expect(set.size).toBe(1000);
   });
 });

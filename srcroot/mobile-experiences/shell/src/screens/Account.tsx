@@ -1,6 +1,7 @@
 // S8 Tài khoản: email + gói (+ ân hạn), banner chỉ đọc, Liên kết Google / Apple, → S7 Thiết bị, → S6 Đồng bộ, Đăng xuất.
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { config } from '../config';
 import { runtime, useRuntime } from '../runtime';
 import { Banner } from '../ui/Banner';
 import { Button } from '../ui/Button';
@@ -113,18 +114,22 @@ export function AccountScreen({ nav }: { nav: Nav }) {
         ) : null}
 
         <ListGroup>
-          <ListRow
-            title="Liên kết Google"
-            subtitle={providerBusy && which === 'google' ? 'Đang mở…' : 'Đăng nhập nhanh hơn, cùng tài khoản'}
-            disabled={providerBusy}
-            onPress={() => void link('google')}
-          />
-          <ListRow
-            title="Liên kết Apple"
-            subtitle={providerBusy && which === 'apple' ? 'Đang mở…' : 'Chỉ bắt buộc trên iPhone'}
-            disabled={providerBusy}
-            onPress={() => void link('apple')}
-          />
+          {config.oauthProviders.includes('google') ? (
+            <ListRow
+              title="Liên kết Google"
+              subtitle={providerBusy && which === 'google' ? 'Đang mở…' : 'Đăng nhập nhanh hơn, cùng tài khoản'}
+              disabled={providerBusy}
+              onPress={() => void link('google')}
+            />
+          ) : null}
+          {config.oauthProviders.includes('apple') ? (
+            <ListRow
+              title="Liên kết Apple"
+              subtitle={providerBusy && which === 'apple' ? 'Đang mở…' : 'Chỉ bắt buộc trên iPhone'}
+              disabled={providerBusy}
+              onPress={() => void link('apple')}
+            />
+          ) : null}
           <ListRow title="Thiết bị" subtitle="Các máy đang đăng nhập" onPress={() => nav.push({ name: 'devices' })} />
           <ListRow title="Đồng bộ" subtitle={rt.pendingChanges > 0 ? `${chipInfo(rt.sync.state, rt.sync.rejected).text} · đang chờ gửi ${rt.pendingChanges} thay đổi` : chipInfo(rt.sync.state, rt.sync.rejected).text} onPress={() => nav.push({ name: 'sync' })} />
         </ListGroup>

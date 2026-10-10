@@ -143,7 +143,7 @@ describe('ui.openUrl + sdk.info().config trên mock', () => {
     expect(r.opened).toHaveLength(1);
   });
   test('info().config: từ cấu hình; chưa có → {}', async () => {
-    expect((await rig({ config: { network: ['a.vn'], sources: [{ key: 'vne' }] } }).call('sdk.info')).result).toMatchObject({ sdkVersion: '0.1.2', config: { network: ['a.vn'], sources: [{ key: 'vne' }] } });
+    expect((await rig({ config: { network: ['a.vn'], sources: [{ key: 'vne' }] } }).call('sdk.info')).result).toMatchObject({ sdkVersion: '0.1.3', config: { network: ['a.vn'], sources: [{ key: 'vne' }] } });
     expect((await rig().call('sdk.info')).result).toMatchObject({ config: {} });
   });
 });

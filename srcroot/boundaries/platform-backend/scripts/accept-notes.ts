@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   try {
     section("Chuẩn bị");
     const have = await q("select to_regclass('public.app_vn_app_note_notes') as t, (select count(*)::int from app_tables where app_id = 'vn.app.note') as n");
-    check("bảng của Ghi chú đã được `registry publish` dựng (4 bảng trong app_tables)", !!have[0].t && have[0].n === 4, js(have[0]));
+    check("bảng của Ghi chú đã được `registry publish` dựng (≥ 4 bảng trong app_tables; vòng 5 thêm note_reminders)", !!have[0].t && have[0].n >= 4, js(have[0]));
     await cleanup();
     const tokA = await session(A);
     const tokB = await session(B);

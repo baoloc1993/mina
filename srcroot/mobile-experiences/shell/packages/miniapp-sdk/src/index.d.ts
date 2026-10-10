@@ -1,4 +1,4 @@
-// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.2, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
+// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.3, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
 // Dùng: `/// <reference types="@platform/miniapp-sdk/types" />` hoặc `import type {} from '@platform/miniapp-sdk/types'`.
 
 export type MiniappErrorCode =
@@ -83,6 +83,8 @@ export interface AppInfo {
   readOnly: boolean;
   /** SDK 0.1.2. Cấu hình app từ server (`registry set-config`), bản cache; `{}` khi chưa có. Khoá `network` do shell dùng (host được thêm vào whitelist). */
   config: Record<string, unknown>;
+  /** SDK 0.1.3. Id tenant đang đăng nhập (UUID), như nhau trên mọi máy của tenant; `null` nếu chưa có phiên. Dùng làm muối khi dựng id tất định — id bảng khoá chính toàn cục, hai tenant không được đụng id nhau. */
+  tenantId: string | null;
 }
 
 export interface SyncStatus {

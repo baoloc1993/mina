@@ -157,11 +157,11 @@ describe('AC-1 thêm nguồn', () => {
     const now = (await listItems(m.sdk)).map((i) => i.id).sort();
     expect(now).toHaveLength(2);
     expect(now.some((id) => old.includes(id))).toBe(false);
-    expect(now).toEqual([itemId(BLOG, 'a', 1), itemId(BLOG, 'b', 1)].sort());
+    expect(now).toEqual([itemId('mock-tenant', BLOG, 'a', 1), itemId('mock-tenant', BLOG, 'b', 1)].sort());
     // bỏ lần nữa rồi thêm lần ba → gen 2
     await removeSource(m.sdk, [second.source.id]);
     await add(m, BLOG);
-    expect((await listItems(m.sdk)).map((i) => i.id).sort()).toEqual([itemId(BLOG, 'a', 2), itemId(BLOG, 'b', 2)].sort());
+    expect((await listItems(m.sdk)).map((i) => i.id).sort()).toEqual([itemId('mock-tenant', BLOG, 'a', 2), itemId('mock-tenant', BLOG, 'b', 2)].sort());
   });
 });
 
