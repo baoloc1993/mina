@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Config, loadProdEnv, validateProdConfig } from "./env.ts";
+import { type Config, loadProdEnv, parseTarget, validateProdConfig } from "./env.ts";
 
 const good: Config = {
   databaseUrl: "postgresql://postgres:pw@db.abc.supabase.co:5432/postgres", supabaseUrl: "https://abc.supabase.co",
@@ -59,4 +59,12 @@ test("loadProdEnv: biến quyết định ghi vào đâu KHÔNG được lấy t
 
 test("loadProdEnv: thiếu file → CONFIG_MISSING", () => {
   assert.throws(() => loadProdEnv(join(tmpdir(), "khong-co-file.env"), {}), /CONFIG_MISSING/);
+});
+
+test("parseTarget: chỉ rỗng / local / prod; Prod, production, bogus → lỗi (không rơi im lặng về local)", () => {
+  assert.equal(parseTarget(undefined), "local");
+  assert.equal(parseTarget(""), "local");
+  assert.equal(parseTarget("local"), "local");
+  assert.equal(parseTarget("prod"), "prod");
+  for (const bad of ["Prod", "PROD", "production", "bogus", " prod"]) assert.throws(() => parseTarget(bad), /không hợp lệ/);
 });

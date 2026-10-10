@@ -5,6 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, json } from "../_shared/auth.ts";
 import { graceDays, isReadOnly } from "../_shared/entitlement_logic.ts";
 import { enforceRate } from "../_shared/ratelimit.ts";
+import { clipRejectionData, MAX_UPLOAD_BYTES } from "../_shared/validate.ts";
 import { MAX_OPS, type Op, type PatchOutcome, processOps, type Rejection, type Store, type StoreError } from "./upload_logic.ts";
 
 function makeStore(token: string, tenantId: string): Store {
@@ -44,7 +45,7 @@ function makeStore(token: string, tenantId: string): Store {
     },
 
     reject(rec: Rejection) {
-      pending.push({ ...rec, tenant_id: tenantId });
+      pending.push({ ...rec, data: clipRejectionData(rec.data), tenant_id: tenantId });
       return Promise.resolve();
     },
 
@@ -81,9 +82,20 @@ Deno.serve(async (req) => {
     }, 403);
   }
 
+  // Vòng 7 (breaker): trần kích thước body — trần 120 lần/phút nhân body không giới hạn là GB/phút vào Postgres.
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (declared > MAX_UPLOAD_BYTES) return json({ error: "PAYLOAD_TOO_LARGE", detail: `body tối đa ${MAX_UPLOAD_BYTES} byte` }, 413);
+  let raw: string;
+  try {
+    raw = await req.text();
+  } catch {
+    return json({ error: "BAD_REQUEST", detail: "không đọc được body" }, 400);
+  }
+  if (raw.length > MAX_UPLOAD_BYTES) return json({ error: "PAYLOAD_TOO_LARGE", detail: `body tối đa ${MAX_UPLOAD_BYTES} byte` }, 413);
+
   let ops: Op[];
   try {
-    ops = (await req.json()).ops;
+    ops = JSON.parse(raw).ops;
     if (!Array.isArray(ops) || ops.length > MAX_OPS) throw new Error();
   } catch {
     return json({ error: "BAD_REQUEST", detail: `body phải là JSON { ops: [...] } với tối đa ${MAX_OPS} thay đổi` }, 400);

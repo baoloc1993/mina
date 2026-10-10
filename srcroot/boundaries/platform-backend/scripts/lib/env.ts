@@ -13,7 +13,14 @@ export const PROD_DIR = resolve(REPO_ROOT, "deployment", "prod");
 
 /** `REGISTRY_ENV=prod` → CLI nhắm Supabase Cloud (deployment/prod/.env). Mặc định local. */
 export function isProd(): boolean {
-  return process.env.REGISTRY_ENV === "prod";
+  return parseTarget(process.env.REGISTRY_ENV) === "prod";
+}
+
+/** `REGISTRY_ENV` chỉ nhận rỗng / `local` / `prod` — giá trị khác (Prod, production…) từng rơi im lặng về DB local (dogfood vòng 7). */
+export function parseTarget(raw: string | undefined): "local" | "prod" {
+  if (raw === undefined || raw === "" || raw === "local") return "local";
+  if (raw === "prod") return "prod";
+  throw new RegistryError("CONFIG_MISSING", `REGISTRY_ENV="${raw}" không hợp lệ — chỉ nhận "prod" hoặc "local" (hoặc để trống)`);
 }
 
 // Biến quyết định CLI ghi vào ĐÂU và ký bằng GÌ: ở chế độ prod chỉ lấy từ deployment/prod/.env, không bao giờ từ môi trường

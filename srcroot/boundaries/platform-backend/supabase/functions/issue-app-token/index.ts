@@ -5,6 +5,7 @@ import { SignJWT } from "npm:jose@5";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, decodeClaims, json } from "../_shared/auth.ts";
 import { enforceRate } from "../_shared/ratelimit.ts";
+import { asObject, parseAppId } from "../_shared/validate.ts";
 
 const encoder = new TextEncoder();
 
@@ -15,16 +16,16 @@ Deno.serve(async (req) => {
   const limited = await enforceRate("issue-app-token", caller.userId); // vòng 7
   if (limited) return limited;
 
-  let body: { app_id?: string };
+  let body: Record<string, unknown> | null;
   try {
-    body = await req.json();
+    body = asObject(await req.json());
   } catch {
-    return json({ error: "BAD_REQUEST", detail: "body phải là JSON { app_id }" }, 400);
+    body = null;
   }
-  const appId = body.app_id;
-  if (!appId || !/^[a-z0-9]+(\.[a-z0-9-]+)+$/.test(appId)) {
-    return json({ error: "BAD_APP_ID", detail: "app_id dạng reverse-domain chữ thường, vd vn.app.hello" }, 400);
-  }
+  if (!body) return json({ error: "BAD_REQUEST", detail: "body phải là JSON { app_id }" }, 400);
+  // Phải là CHUỖI (dogfood vòng 7: app_id mảng từng lọt và đi vào claim JWT + dòng đếm rác).
+  const appId = parseAppId(body.app_id);
+  if (!appId) return json({ error: "BAD_APP_ID", detail: "app_id dạng reverse-domain chữ thường, vd vn.app.hello" }, 400);
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: `Bearer ${caller.token}` } },

@@ -30,6 +30,8 @@ WEB = REPO / "srcroot" / "web-experiences"
 MINIAPPS = [("Ghi chú", WEB / "miniapp-note"), ("Lịch", WEB / "miniapp-calendar"), ("Đọc báo", WEB / "miniapp-news")]
 FUNCTIONS = ["catalog", "issue-app-token", "upload", "health"]
 STEPS = ["preflight", "link", "db", "secrets", "functions", "auth", "registry", "powersync", "health", "android"]
+# Ghim phiên bản CLI (không `@latest`): deploy production không được đổi hành vi theo ngày chạy.
+SUPABASE_CLI = "supabase@2.120.0"
 NPX = "npx.cmd" if os.name == "nt" else "npx"
 NPM = "npm.cmd" if os.name == "nt" else "npm"
 
@@ -92,10 +94,18 @@ class Deploy:
             sys.exit(f"SUPABASE_URL phải dạng https://{ref}.supabase.co (đang khác project ref)")
         if not self.env["POWERSYNC_URL"].startswith("https://"):
             sys.exit("POWERSYNC_URL phải là https://")
-        if re.search(r"127\.0\.0\.1|localhost|10\.0\.2\.2", self.env["DATABASE_URL"]):
-            sys.exit("DATABASE_URL đang trỏ về máy local")
-        if self.env["SIGNING_KEY_ID"].startswith("local-"):
-            sys.exit("SIGNING_KEY_ID không được là khoá local (dùng prod-1)")
+        # Máy local / mạng nội bộ ở BẤT KỲ dạng nào: localhost, loopback v4/v6, host.docker.internal, 10.x, 172.16–31.x, 192.168.x, *.local
+        local_re = re.compile(r"(?i)(localhost|127\.\d+\.\d+\.\d+|\[::1\]|host\.docker\.internal|(^|[/@.])10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|\.local)")
+        for name in ("DATABASE_URL", "POWERSYNC_URL"):
+            if local_re.search(self.env[name]):
+                sys.exit(f"{name} đang trỏ về máy local / mạng nội bộ")
+        # DATABASE_URL phải thuộc ĐÚNG project của SUPABASE_URL (pooler: user `postgres.<ref>`; trực tiếp: host `db.<ref>.supabase.co`) — tránh publish vào DB khác.
+        if ref not in self.env["DATABASE_URL"]:
+            sys.exit("DATABASE_URL không chứa project ref của SUPABASE_URL — có thể trỏ nhầm database")
+        if not re.fullmatch(r"prod-\d+", self.env["SIGNING_KEY_ID"]):
+            sys.exit("SIGNING_KEY_ID phải dạng prod-<số> (vd prod-1), không dùng khoá local/dev")
+        if re.search(r"(?i)local", Path(self.env["SIGNING_KEY_PATH"]).name):
+            sys.exit("SIGNING_KEY_PATH là tệp khoá local")
         if not Path(self.env["SIGNING_KEY_PATH"]).exists() and not self.dry:
             self.say(f"chưa có khoá ký ở {self.env['SIGNING_KEY_PATH']} — bước registry sẽ sinh bằng `registry keygen`")
         git = subprocess.run(["git", "status", "--porcelain", "--", "srcroot", "deployment/prod"], cwd=REPO, capture_output=True, text=True)
@@ -111,12 +121,12 @@ class Deploy:
 
     def link(self) -> None:
         # SUPABASE_ACCESS_TOKEN và SUPABASE_DB_PASSWORD đi qua môi trường của tiến trình con (CLI tự đọc), không qua tham số.
-        self.run([NPX, "--yes", "supabase@latest", "link", "--project-ref", self.env["SUPABASE_PROJECT_REF"]], BACKEND)
+        self.run([NPX, "--yes", SUPABASE_CLI, "link", "--project-ref", self.env["SUPABASE_PROJECT_REF"]], BACKEND)
 
     def db(self) -> None:
         self.say("migration chỉ CỘNG THÊM (BACKWARD-COMPATIBILITY §2); xem trước danh sách rồi áp")
-        self.run([NPX, "--yes", "supabase@latest", "db", "push", "--linked", "--dry-run"], BACKEND)
-        self.run([NPX, "--yes", "supabase@latest", "db", "push", "--linked"], BACKEND)
+        self.run([NPX, "--yes", SUPABASE_CLI, "db", "push", "--linked", "--dry-run"], BACKEND)
+        self.run([NPX, "--yes", SUPABASE_CLI, "db", "push", "--linked"], BACKEND)
 
     def secrets(self) -> None:
         pairs = {
@@ -138,13 +148,13 @@ class Deploy:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write("".join(f"{k}={v}\n" for k, v in pairs.items()))
             os.chmod(name, 0o600)
-            self.run([NPX, "--yes", "supabase@latest", "secrets", "set", "--env-file", name, "--project-ref", self.env["SUPABASE_PROJECT_REF"]], BACKEND)
+            self.run([NPX, "--yes", SUPABASE_CLI, "secrets", "set", "--env-file", name, "--project-ref", self.env["SUPABASE_PROJECT_REF"]], BACKEND)
         finally:
             Path(name).unlink(missing_ok=True)
 
     def functions(self) -> None:
         for fn in FUNCTIONS:
-            self.run([NPX, "--yes", "supabase@latest", "functions", "deploy", fn, "--project-ref", self.env["SUPABASE_PROJECT_REF"], "--no-verify-jwt"], BACKEND)
+            self.run([NPX, "--yes", SUPABASE_CLI, "functions", "deploy", fn, "--project-ref", self.env["SUPABASE_PROJECT_REF"], "--no-verify-jwt"], BACKEND)
 
     def auth(self) -> None:
         """Cấu hình Auth production qua Management API rồi ĐỌC LẠI để kiểm — tên trường sai/không áp được thì dừng ở đây."""
@@ -252,6 +262,12 @@ def load_env(path: Path) -> dict[str, str]:
 
 
 def main() -> None:
+    # Log ra pipe/file trên Windows mặc định cp1252 → UnicodeEncodeError giữa chừng deploy (dogfood vòng 7).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
     ap = argparse.ArgumentParser(description="deploy production (vòng 7)")
     ap.add_argument("command", nargs="?", choices=["create-user"], help="create-user <email>")
     ap.add_argument("email", nargs="?")

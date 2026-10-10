@@ -126,7 +126,7 @@ export async function processOps(
           res = accepted(id);
         } else if (err.error.code === "23505") {
           // Trùng khoá: đua với PUT khác cùng id, hoặc id thuộc tenant khác → thử lại như PATCH.
-          res = (await onExisting()) ?? (await rejected(op, "FORBIDDEN", "id đã thuộc dòng khác"));
+          res = (await onExisting()) ?? (await rejected(op, "FORBIDDEN", "không thấy dòng hoặc không đủ quyền"));
         } else {
           const code = classifyDbError(err.error);
           if (!code) throw new Error(err.error.message);
