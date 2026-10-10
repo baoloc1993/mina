@@ -13,7 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import pg from "pg";
 import { addTester, getConfig, promote, revoke, setConfig, setEntitlement, setPlan } from "./lib/admin.ts";
-import { BACKEND_DIR, config, LOCAL_DIR, loadLocalEnv } from "./lib/env.ts";
+import { BACKEND_DIR, config, isProd, LOCAL_DIR, loadLocalEnv, PROD_DIR } from "./lib/env.ts";
 import { RegistryError } from "./lib/errors.ts";
 import { publish } from "./lib/publish.ts";
 import { generateKeyFile } from "./lib/sign.ts";
@@ -165,7 +165,8 @@ async function main(): Promise<void> {
         console.log(JSON.stringify(await getConfig(db, args[0]), null, 2));
         break;
       case "gen-sync-rules": {
-        const out = resolve(BACKEND_DIR, "powersync", "sync-rules.yaml");
+        // Prod ghi ra deployment/prod/sync-rules.yaml — KHÔNG đè file local (powersync/sync-rules.yaml là của docker dev).
+        const out = isProd() ? resolve(PROD_DIR, "sync-rules.yaml") : resolve(BACKEND_DIR, "powersync", "sync-rules.yaml");
         const apps = await loadApps(db);
         const next = renderSyncRules(apps);
         const prev = existsSync(out) ? readFileSync(out, "utf8").replace(/\r\n/g, "\n") : "";
@@ -179,6 +180,10 @@ async function main(): Promise<void> {
         const added = [...after].filter((x) => !before.has(x)).join(", ") || "(không)";
         const removed = [...before].filter((x) => !after.has(x)).join(", ") || "(không)";
         console.log(`Đã ghi ${out} (${apps.length} app) — thêm bucket: ${added} · bỏ: ${removed}.`);
+        if (isProd()) {
+          console.log("Production: đẩy file này lên instance PowerSync Cloud (DEPLOY.md §2 bước 7), không restart docker.");
+          break;
+        }
         console.log("Restart PowerSync để áp dụng (chạy ở thư mục nào cũng được):");
         console.log(`  docker compose --env-file "${resolve(LOCAL_DIR, ".env")}" -f "${resolve(LOCAL_DIR, "docker-compose.yml")}" restart powersync`);
         break;

@@ -11,6 +11,8 @@
 *.keystore
 deployment/prod/releases/
 deployment/local/releases/
+deployment/local/backups/
+deployment/prod/backups/
 
 # OS
 .DS_Store

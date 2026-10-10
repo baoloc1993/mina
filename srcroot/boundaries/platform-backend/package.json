@@ -12,7 +12,10 @@
     "accept:notes": "node scripts/accept-notes.ts",
     "accept:calendar": "node scripts/accept-calendar.ts",
     "accept:news": "node scripts/accept-news.ts",
-    "accept:ops": "node scripts/accept-ops.ts"
+    "accept:ops": "node scripts/accept-ops.ts",
+    "ops:report": "node scripts/ops-report.ts",
+    "ops:backup-files": "node scripts/ops-backup-files.ts",
+    "ops:verify-restore": "node scripts/ops-verify-restore.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

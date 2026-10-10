@@ -40,9 +40,10 @@ help:
 	@echo "  make test     pgTAP + deno test + node test (CLI) + Jest (shell: bridge, package manager, entitlement…) + Vitest (SDK + mock)"
 	@echo "  make mock     mock SDK trên trình duyệt: make mock FIXTURE=fixtures/miniapp-hello"
 	@echo "  make seed     dữ liệu mẫu + publish hello 0.2.0, hello-cal, bản hello 0.3.0 lỗi migration (cần make dev)"
-	@echo "  make accept   acceptance HTTP AC-1..AC-10 trên backend đang chạy (sau make dev + seed)"
+	@echo "  make accept   acceptance HTTP trên backend local đang chạy (sau make dev + seed), gồm accept:ops (vòng 7)"
+	@echo "  make release-android[-local]  APK release ký thật (prod: https + keystore prod · local: backend docker)"
 	@echo "  make migrate  áp migration có version vào DB local"
-	@echo "  make deploy   (chưa có nơi deploy — vòng 7)"
+	@echo "  make deploy   lên production: Supabase Cloud + Edge Functions + registry + APK (deployment/prod/README.md; --dry-run để xem trước)"
 	@echo ""
 	@echo ""
 
@@ -111,7 +112,9 @@ release-android:
 migrate:
 	$(SUPABASE) migration up --local
 
+# Production (vòng 7): deployment/prod/deploy.py. Thêm cờ: make deploy DEPLOY_ARGS="--dry-run"
+# Tạo tài khoản: make deploy DEPLOY_ARGS="create-user a@b.c"
+DEPLOY_ARGS ?=
 deploy:
-	@echo "Chưa có nơi deploy — vòng 1–6 chỉ chạy local; deploy lần đầu ở vòng 7 (ROADMAP §1)."
-	@exit 1
+	@$(PYTHON) deployment/prod/deploy.py $(DEPLOY_ARGS)
 
