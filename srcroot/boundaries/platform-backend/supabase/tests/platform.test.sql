@@ -220,7 +220,9 @@ end $$;
 create temp table tt as
   select c.table_name::text as t
     from information_schema.columns c join pg_tables p on p.schemaname = 'public' and p.tablename = c.table_name
-   where c.table_schema = 'public' and c.column_name = 'tenant_id';
+   where c.table_schema = 'public' and c.column_name = 'tenant_id'
+     -- app_opens_daily (vòng 7) khoá chính (tenant_id, app_id, day), không có cột `id`, authenticated chỉ SELECT: RLS kiểm riêng ở ops.test.sql.
+     and c.table_name <> 'app_opens_daily';
 grant select on tt to authenticated;
 create temp table rls_fail (t text, why text);
 grant all on rls_fail to authenticated;

@@ -65,7 +65,7 @@ check:
 	cd $(NOTE_DIR) && npm --silent run typecheck && npm --silent run build
 	cd $(CAL_DIR) && npm --silent run typecheck && npm --silent run build
 	cd $(NEWS_DIR) && npm --silent run typecheck && npm --silent run build
-	$(NPM_BE) exec -- deno check --no-lock supabase/functions/upload/index.ts supabase/functions/catalog/index.ts supabase/functions/issue-app-token/index.ts
+	$(NPM_BE) exec -- deno check --no-lock supabase/functions/upload/index.ts supabase/functions/catalog/index.ts supabase/functions/issue-app-token/index.ts supabase/functions/health/index.ts
 	@echo "OK: typecheck shell + SDK/mock + Ghi chú + Lịch + Đọc báo (build dist/) + CLI registry + Edge Functions sạch, fixtures đóng được"
 
 test:

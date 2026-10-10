@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, json } from "../_shared/auth.ts";
 import { graceDays, isReadOnly } from "../_shared/entitlement_logic.ts";
+import { enforceRate } from "../_shared/ratelimit.ts";
 import { MAX_OPS, type Op, type PatchOutcome, processOps, type Rejection, type Store, type StoreError } from "./upload_logic.ts";
 
 function makeStore(token: string, tenantId: string): Store {
@@ -58,6 +59,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const caller = await authenticate(req);
   if (caller instanceof Response) return caller;
+  // Vòng 7: trần theo user, đếm TRƯỚC khi xử lý — 429 nghĩa là chưa áp gì, client giữ lô và gửi lại.
+  const limited = await enforceRate("upload", caller.userId);
+  if (limited) return limited;
 
   // Vòng 3: tenant quá ân hạn -> chỉ đọc. Từ chối CẢ LÔ, không ghi gì, không ghi sync_rejections (client giữ lô để gửi lại).
   const grace = graceDays(Deno.env.get("ENTITLEMENT_GRACE_DAYS"));

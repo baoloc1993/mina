@@ -2,11 +2,10 @@
 // Edge Function trả `{error: CODE}`; RPC trả `message = CODE` và LUÔN HTTP 400 — chỉ tin message).
 import { config } from '../config';
 import { PackageError, type CatalogResponse, type PackageErrorCode } from '../packages/types';
+import { catalogStatusError, UnauthorizedError } from './httpStatus';
 import { supabase } from './supabase';
 
-export class UnauthorizedError extends Error {
-  readonly code = 'UNAUTHORIZED';
-}
+export { UnauthorizedError } from './httpStatus';
 
 const KNOWN: PackageErrorCode[] = [
   'QUOTA_EXCEEDED', 'APP_NOT_AVAILABLE', 'NO_VERSION', 'APP_NOT_INSTALLED', 'NO_TENANT', 'SESSION_REVOKED',
@@ -41,8 +40,8 @@ export async function fetchCatalog(): Promise<CatalogResponse> {
       signal: ctl.signal,
       headers: { authorization: `Bearer ${s.access_token}`, apikey: config.supabaseAnonKey, connection: 'close' },
     });
-    if (res.status === 401) throw new UnauthorizedError('Phiên đăng nhập hết hiệu lực');
-    if (!res.ok) throw new PackageError('INTERNAL', `catalog HTTP ${res.status}`);
+    const failure = catalogStatusError(res.status);
+    if (failure) throw failure;
     return (await res.json()) as CatalogResponse;
   } catch (e) {
     if (e instanceof UnauthorizedError || e instanceof PackageError) throw e;

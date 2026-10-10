@@ -421,6 +421,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.catalog]
 verify_jwt = false
+[functions.health]
+verify_jwt = false
 
 # Bucket gói mini app đã ký (riêng tư — tải qua URL ký hạn 15 phút).
 [storage.buckets.packages]

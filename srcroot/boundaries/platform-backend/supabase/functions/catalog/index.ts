@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, json } from "../_shared/auth.ts";
 import { graceDays, toEntitlement } from "../_shared/entitlement_logic.ts";
+import { enforceRate } from "../_shared/ratelimit.ts";
 import { type CatalogRow, publicOrigin, rewriteOrigin, toCatalogApp } from "./catalog_logic.ts";
 
 const URL_TTL_SECONDS = 900;
@@ -12,6 +13,8 @@ Deno.serve(async (req) => {
   if (req.method !== "GET") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const caller = await authenticate(req);
   if (caller instanceof Response) return caller;
+  const limited = await enforceRate("catalog", caller.userId); // vòng 7
+  if (limited) return limited;
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
