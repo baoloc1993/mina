@@ -35,8 +35,8 @@ mkdirSync(dirname(jks), { recursive: true });
 const r = spawnSync(keytool, [
   '-genkeypair', '-v', '-storetype', 'PKCS12', '-keystore', jks, '-alias', alias,
   '-keyalg', 'RSA', '-keysize', '3072', '-validity', '10000',
-  '-storepass', pass, '-keypass', pass, '-dname', `CN=${cn}, O=Mina, C=VN`,
-], { encoding: 'utf8' });
+  '-storepass:env', 'MINA_KS_PASS', '-keypass:env', 'MINA_KS_PASS', '-dname', `CN=${cn}, O=Mina, C=VN`,
+], { encoding: 'utf8', env: { ...process.env, MINA_KS_PASS: pass } }); // mật khẩu không nằm trong argv (không hiện ở danh sách tiến trình)
 if (r.status !== 0) {
   console.error(`new-keystore: keytool lỗi\n${r.stderr || r.stdout}`);
   process.exit(1);

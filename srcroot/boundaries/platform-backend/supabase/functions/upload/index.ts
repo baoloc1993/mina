@@ -4,8 +4,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, json } from "../_shared/auth.ts";
 import { graceDays, isReadOnly } from "../_shared/entitlement_logic.ts";
+import { log, serveLogged } from "../_shared/log.ts";
 import { enforceRate } from "../_shared/ratelimit.ts";
-import { clipRejectionData, MAX_UPLOAD_BYTES } from "../_shared/validate.ts";
+import { clipRejectionData, MAX_UPLOAD_BYTES, readTextLimited } from "../_shared/validate.ts";
 import { MAX_OPS, type Op, type PatchOutcome, processOps, type Rejection, type Store, type StoreError } from "./upload_logic.ts";
 
 function makeStore(token: string, tenantId: string): Store {
@@ -56,7 +57,7 @@ function makeStore(token: string, tenantId: string): Store {
   };
 }
 
-Deno.serve(async (req) => {
+serveLogged("upload", async (req, rid) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const caller = await authenticate(req);
   if (caller instanceof Response) return caller;
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
   });
   const ten = await sbUser.from("tenants").select("entitlement_until").eq("id", caller.tenantId).maybeSingle();
   if (ten.error) {
-    console.error("[upload] đọc entitlement lỗi:", ten.error.message);
+    log("error", "upload", "entitlement_query_failed", { error: ten.error.message }, rid);
     return json({ error: "INTERNAL" }, 500);
   }
   if (isReadOnly(ten.data?.entitlement_until, grace)) {
@@ -85,13 +86,13 @@ Deno.serve(async (req) => {
   // Vòng 7 (breaker): trần kích thước body — trần 120 lần/phút nhân body không giới hạn là GB/phút vào Postgres.
   const declared = Number(req.headers.get("content-length") ?? "0");
   if (declared > MAX_UPLOAD_BYTES) return json({ error: "PAYLOAD_TOO_LARGE", detail: `body tối đa ${MAX_UPLOAD_BYTES} byte` }, 413);
-  let raw: string;
+  let raw: string | null;
   try {
-    raw = await req.text();
+    raw = await readTextLimited(req.body, MAX_UPLOAD_BYTES); // đếm BYTE khi đọc — chunked không có Content-Length cũng không ăn hết RAM
   } catch {
     return json({ error: "BAD_REQUEST", detail: "không đọc được body" }, 400);
   }
-  if (raw.length > MAX_UPLOAD_BYTES) return json({ error: "PAYLOAD_TOO_LARGE", detail: `body tối đa ${MAX_UPLOAD_BYTES} byte` }, 413);
+  if (raw === null) return json({ error: "PAYLOAD_TOO_LARGE", detail: `body tối đa ${MAX_UPLOAD_BYTES} byte` }, 413);
 
   let ops: Op[];
   try {
@@ -105,7 +106,7 @@ Deno.serve(async (req) => {
     const results = await processOps(ops, caller.tenantId, makeStore(caller.token, caller.tenantId));
     return json({ server_time: new Date().toISOString(), results });
   } catch (e) {
-    console.error("[upload] lỗi hạ tầng:", e instanceof Error ? e.message : e);
+    log("error", "upload", "infra_error", { error: e instanceof Error ? e.message : String(e) }, rid);
     return json({ error: "INTERNAL" }, 500);
   }
 });

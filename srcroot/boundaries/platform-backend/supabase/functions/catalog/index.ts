@@ -4,12 +4,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, json } from "../_shared/auth.ts";
 import { graceDays, toEntitlement } from "../_shared/entitlement_logic.ts";
+import { log, serveLogged } from "../_shared/log.ts";
 import { enforceRate } from "../_shared/ratelimit.ts";
 import { type CatalogRow, publicOrigin, rewriteOrigin, toCatalogApp } from "./catalog_logic.ts";
 
 const URL_TTL_SECONDS = 900;
 
-Deno.serve(async (req) => {
+serveLogged("catalog", async (req, rid) => {
   if (req.method !== "GET") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const caller = await authenticate(req);
   if (caller instanceof Response) return caller;
@@ -21,7 +22,7 @@ Deno.serve(async (req) => {
   });
   const { data, error } = await sb.rpc("catalog_for", { p_tenant: caller.tenantId });
   if (error) {
-    console.error("[catalog]", error.message);
+    log("error", "catalog", "catalog_for_failed", { error: error.message }, rid);
     return json({ error: "INTERNAL" }, 500);
   }
 
@@ -35,7 +36,7 @@ Deno.serve(async (req) => {
     appIds.length ? sb.from("app_configs").select("app_id, config").in("app_id", appIds) : Promise.resolve({ data: [], error: null }),
   ]);
   if (inst.error || ten.error || vers.error || cfgs.error) {
-    console.error("[catalog]", inst.error?.message ?? ten.error?.message ?? vers.error?.message ?? cfgs.error?.message);
+    log("error", "catalog", "query_failed", { error: inst.error?.message ?? ten.error?.message ?? vers.error?.message ?? cfgs.error?.message }, rid);
     return json({ error: "INTERNAL" }, 500);
   }
   const positions = new Map<string, number | null>((inst.data ?? []).map((r: { app_id: string; position: number | null }) => [r.app_id, r.position]));

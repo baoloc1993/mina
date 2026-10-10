@@ -2,6 +2,7 @@
 // Lô chia ≤ 100 thay đổi. `REJECTED` ghi sẵn ở server (sync_rejections) nên tách khỏi hàng đợi, không chặn lô.
 // 401 → báo UI về S1 (hàng đợi giữ); 403 READ_ONLY → giữ nguyên hàng đợi, báo entitlement; lỗi khác → ném để engine thử lại.
 import type { AbstractPowerSyncDatabase, PowerSyncBackendConnector } from '@powersync/common';
+import { rateLimitDelayMs } from './retryAfter';
 import { config } from '../config';
 import { supabase } from '../auth/supabase';
 import { chunk, UPLOAD_BATCH } from './chunk';
@@ -71,6 +72,12 @@ export class Connector implements PowerSyncBackendConnector {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         if (body.error === 'READ_ONLY') this.hooks.onReadOnly();
         throw new Error(`upload HTTP 403 ${body.error ?? ''}`.trim());
+      }
+      if (res.status === 429) {
+        // RATE_LIMITED: lô CHƯA áp gì (server đếm trước khi xử lý) — đợi theo Retry-After rồi để engine gửi lại cả giao dịch.
+        const b = (await res.json().catch(() => ({}))) as { retry_after_s?: unknown };
+        await new Promise((r) => setTimeout(r, rateLimitDelayMs(res.headers.get('retry-after'), b.retry_after_s)));
+        throw new Error('upload HTTP 429');
       }
       if (!res.ok) throw new Error(`upload HTTP ${res.status}`);
       const body = (await res.json()) as { results: UploadResult[] };

@@ -5,6 +5,11 @@
 import pg from "pg";
 import { config, loadLocalEnv } from "./lib/env.ts";
 
+/** Thuần: ngày hiện tại theo giờ Việt Nam (UTC+7, không có giờ mùa hè) dạng YYYY-MM-DD. */
+export function vnToday(now: number): string {
+  return new Date(now + 7 * 3600_000).toISOString().slice(0, 10);
+}
+
 export type DayRow = { day: string; opens: number; apps: string[] };
 
 /** Thuần: từ danh sách ngày có dùng → số ngày dùng, ngày trống, chuỗi dài nhất, ngày cuối (để test không cần DB). */
@@ -35,13 +40,13 @@ async function main(): Promise<void> {
   if (!email) { console.error("dùng: npm run ops:report -- <email> [--from YYYY-MM-DD] [--days 28]"); process.exit(2); }
   const days = Number(flag("--days") ?? 28);
   if (!Number.isInteger(days) || days < 1 || days > 366) { console.error("--days phải là số nguyên 1..366"); process.exit(2); }
-  const from = flag("--from") ?? new Date(Date.now() + 7 * 3600_000 - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const from = flag("--from") ?? vnToday(Date.now() - (days - 1) * 86_400_000);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { console.error("--from phải dạng YYYY-MM-DD"); process.exit(2); }
 
   const db = new pg.Client({ connectionString: config().databaseUrl });
   await db.connect();
   try {
-    const t = await db.query("select t.id from public.tenants t join auth.users u on u.id = t.owner_user_id where u.email = $1", [email]);
+    const t = await db.query("select t.id from public.tenants t join auth.users u on u.id = t.owner_user_id where u.email = $1", [email.toLowerCase()]); // GoTrue lưu email chữ thường
     if (t.rowCount === 0) { console.error(`không có tenant cho ${email}`); process.exit(1); }
     const r = await db.query(
       `select day::text as day, sum(opens)::int as opens, array_agg(app_id order by app_id) as apps

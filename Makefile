@@ -78,6 +78,8 @@ test:
 	cd $(NOTE_DIR) && npm --silent test
 	cd $(CAL_DIR) && npm --silent test
 	cd $(NEWS_DIR) && npm --silent test
+	PYTHONUTF8=1 $(PYTHON) -m unittest deployment/prod/test_deploy.py
+	cd $(SHELL_DIR) && node --test scripts/release-android.test.mjs
 
 FIXTURE ?= fixtures/miniapp-hello
 mock:
@@ -107,7 +109,7 @@ keystore-prod:
 
 release-android:
 	@test -f deployment/prod/.env || (echo "Thiếu deployment/prod/.env (xem deployment/prod/README.md)" && exit 1)
-	unset ANDROID_KEYSTORE_PATH ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; set -a; . deployment/prod/.env; set +a; cd $(SHELL_DIR) && EXPO_PUBLIC_SUPABASE_URL=$$SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY=$$SUPABASE_ANON_KEY EXPO_PUBLIC_POWERSYNC_URL=$$POWERSYNC_URL node scripts/release-android.mjs
+	cd $(SHELL_DIR) && node scripts/release-android.mjs --env-file ../../../deployment/prod/.env
 
 migrate:
 	$(SUPABASE) migration up --local

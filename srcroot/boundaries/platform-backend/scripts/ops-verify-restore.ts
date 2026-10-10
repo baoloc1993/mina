@@ -4,6 +4,7 @@
 // Lệch chỉ được là dòng ghi SAU giờ backup: cần --backup-at; script đếm dòng nguồn có created_at/updated_at > mốc đó
 // và chỉ chấp nhận khi `nguồn − dòng sau mốc = khôi phục`. Không in chuỗi kết nối (có mật khẩu).
 import pg from "pg";
+import { config, isProd, loadLocalEnv } from "./lib/env.ts";
 
 export type TableCount = { table: string; source: number; restored: number; late: number | null };
 export type Verdict = { table: string; source: number; restored: number; late: number; ok: boolean; note: string };
@@ -31,7 +32,9 @@ async function countsOf(db: pg.Client, tables: string[]): Promise<Map<string, nu
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const flag = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-  const source = flag("--source"), restored = flag("--restored"), backupAt = flag("--backup-at");
+  loadLocalEnv();
+  // Production: --source mặc định = DATABASE_URL trong deployment/prod/.env (không phải biến của shell).
+  const source = flag("--source") ?? (isProd() ? config().databaseUrl : undefined), restored = flag("--restored"), backupAt = flag("--backup-at");
   if (!source || !restored) { console.error("dùng: npm run ops:verify-restore -- --source <url> --restored <url> [--backup-at <ISO>]"); process.exit(2); }
   if (source === restored) { console.error("--source và --restored phải khác nhau"); process.exit(2); }
   if (backupAt && Number.isNaN(Date.parse(backupAt))) { console.error("--backup-at phải là ISO-8601"); process.exit(2); }

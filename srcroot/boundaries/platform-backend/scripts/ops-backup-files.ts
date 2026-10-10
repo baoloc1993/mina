@@ -7,7 +7,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { config, isProd, loadLocalEnv, LOCAL_DIR, PROD_DIR, requireServiceKey } from "./lib/env.ts";
 
 export type ManifestEntry = { path: string; size: number; sha256: string; fetched_at: string };
@@ -57,7 +57,7 @@ async function main(): Promise<void> {
     if (dl.error || !dl.data) { throw new Error(`tải ${f.path}: ${dl.error?.message ?? "rỗng"}`); }
     const buf = Buffer.from(await dl.data.arrayBuffer());
     const dest = resolve(root, f.path);
-    if (!dest.startsWith(root)) throw new Error(`đường dẫn thoát thư mục sao lưu: ${f.path}`);
+    if (!dest.startsWith(root + sep)) throw new Error(`đường dẫn thoát thư mục sao lưu: ${f.path}`);
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, buf);
     manifest[f.path] = { path: f.path, size: buf.length, sha256: createHash("sha256").update(buf).digest("hex"), fetched_at: new Date().toISOString() };

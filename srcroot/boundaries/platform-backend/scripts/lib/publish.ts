@@ -151,6 +151,11 @@ async function publishLocked(db: Client, cfg: Config, opts: PublishOptions, mani
     }
     const toHarden = new Set([...tables, ...pending.flatMap((m) => m.createdTables)]);
     for (const t of toHarden) await hardenSyncTable(db, appId, t);
+    // CHECK độ dài/giá trị (NOT VALID) của Ghi chú/Lịch/Đọc báo chỉ gắn được SAU khi bảng tồn tại — migration `db push` chạy lúc chưa có bảng nên
+    // không đủ (production từng thiếu hết). Gọi lại sau mỗi lần publish dựng bảng; hàm tự bỏ qua bảng chưa có (idempotent).
+    for (const fn of ["ensure_note_limits", "ensure_calendar_limits", "ensure_news_limits"]) {
+      await db.query(`select public.${fn}() where to_regprocedure('public.${fn}()') is not null`);
+    }
     for (const i of receivesOf(manifest)) {
       await db.query(
         `insert into public.intent_schemas (type, version, schema, app_id) values ($1, $2, $3, $4)

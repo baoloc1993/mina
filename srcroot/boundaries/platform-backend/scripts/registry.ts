@@ -32,6 +32,7 @@ const USAGE = `Dùng (chạy từ srcroot/boundaries/platform-backend): npm run 
   set-entitlement <email> <ISO|null>  đặt hạn gói của tenant (vd 2026-09-01; quá hạn + 7 ngày ân hạn -> upload 403 READ_ONLY); null = không hết hạn
   set-config <app> <file.json>        đặt cấu hình app từ server (JSON object ≤ 64 KB; khoá network = mảng host); app đọc qua sdk.info().config
   get-config <app>                    in cấu hình hiện tại của app ({} nếu chưa có)
+  cron-check                          kiểm job pg_cron cần có (purge-trashed-notes, purge-news-items, purge-rate-limits) — thiếu thì lỗi CRON_MISSING (migration nuốt lỗi pg_cron)
   gen-sync-rules                      ghi powersync/sync-rules.yaml từ registry; báo có đổi không (đổi mới cần restart PowerSync)`;
 
 const ARGS: Record<string, string> = {
@@ -83,7 +84,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd && !(cmd in ARGS) && !["keygen", "list", "gen-sync-rules"].includes(cmd)) {
+  if (cmd && !(cmd in ARGS) && !["keygen", "list", "gen-sync-rules", "cron-check"].includes(cmd)) {
     throw new RegistryError("UNKNOWN_COMMAND", `không có lệnh "${cmd}"\n${USAGE}`);
   }
   const need = (n: number): void => {
@@ -101,6 +102,20 @@ async function main(): Promise<void> {
         console.log(`  bảng: ${r.tables.join(", ") || "(không)"} · migration mới: ${r.appliedMigrations.join(", ") || "(không)"}`);
         console.log(`  Tiếp: add-tester ${r.appId} ${r.version} <email> để tenant thử thấy, hoặc promote ${r.appId} ${r.version}.`);
         console.log("  Nếu app có bảng mới: chạy gen-sync-rules rồi restart PowerSync.");
+        break;
+      }
+      case "cron-check": {
+        const need3 = ["purge-trashed-notes", "purge-news-items", "purge-rate-limits"];
+        let rows: { jobname: string; active: boolean }[] = [];
+        try {
+          rows = (await db.query("select jobname, active from cron.job")).rows;
+        } catch (e) {
+          throw new RegistryError("CRON_MISSING", `không đọc được cron.job (pg_cron chưa bật?): ${(e as Error).message}`);
+        }
+        const have = new Map(rows.map((r) => [r.jobname, r.active]));
+        for (const j of need3) console.log(`  ${have.get(j) ? "✓" : "✗"} ${j}${have.has(j) && !have.get(j) ? " (đang tắt)" : ""}`);
+        const bad = need3.filter((j) => !have.get(j));
+        if (bad.length) throw new RegistryError("CRON_MISSING", `thiếu/tắt job: ${bad.join(", ")} — bật extension pg_cron ở Dashboard → Database → Extensions rồi chạy lại migration cron (cron.schedule)`);
         break;
       }
       case "list": {

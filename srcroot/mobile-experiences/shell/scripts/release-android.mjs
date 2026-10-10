@@ -12,12 +12,30 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shellDir = resolve(here, '..');
 const repoRoot = resolve(shellDir, '../../..');
 const local = process.argv.includes('--local');
 const env = process.env;
+
+// --env-file <file.env>: đọc biến production bằng parser dotenv (không `source` trong shell: mật khẩu có $ & ; ( ) ! sẽ bị shell hiểu sai).
+// Biến của file THẮNG môi trường đã nạp (make nạp deployment/local/.env vào mọi recipe → không để khoá/URL local lọt vào bản production).
+const envFileIdx = process.argv.indexOf('--env-file');
+if (envFileIdx >= 0) {
+  const file = process.argv[envFileIdx + 1];
+  if (!file || !existsSync(file)) {
+    console.error(`release-android: không thấy --env-file ${file ?? '(thiếu đường dẫn)'}`);
+    process.exit(1);
+  }
+  const parsed = parseEnv(readFileSync(file, 'utf8'));
+  for (const k of Object.keys(env)) if (/^(ANDROID_|EXPO_PUBLIC_|SUPABASE_|POWERSYNC_)/.test(k)) delete env[k];
+  Object.assign(env, parsed);
+  env.EXPO_PUBLIC_SUPABASE_URL = parsed.SUPABASE_URL ?? '';
+  env.EXPO_PUBLIC_SUPABASE_ANON_KEY = parsed.SUPABASE_ANON_KEY ?? '';
+  env.EXPO_PUBLIC_POWERSYNC_URL = parsed.POWERSYNC_URL ?? '';
+}
 
 function fail(msg) {
   console.error(`release-android: ${msg}`);
@@ -121,6 +139,14 @@ const certs = `${v.stdout}${v.stderr}`;
 if (v.status !== 0) fail(`apksigner verify hỏng:\n${certs}`);
 if (/Android Debug/i.test(certs)) fail('APK đang ký bằng khoá DEBUG — từ chối');
 const sha1 = /certificate SHA-256 digest: ([0-9a-f]+)/i.exec(certs)?.[1] ?? '?';
+// Ghim dấu vân tay chứng chỉ: keystore sai/sinh lại cho APK ký khác chữ ký → KHÔNG cài đè được lên máy đã cài (mất dữ liệu chưa sync).
+const pinned = (env.ANDROID_CERT_SHA256 ?? '').trim().toLowerCase();
+if (pinned && pinned !== sha1.toLowerCase()) {
+  fail(`chứng chỉ ký ${sha1} KHÁC ANDROID_CERT_SHA256 ${pinned} — keystore sai hoặc đã bị sinh lại; APK này không cài đè được bản đã phát`);
+}
+if (!pinned && !local) {
+  console.log(`release-android: CHƯA ghim chứng chỉ — sau bản production đầu tiên thêm vào deployment/prod/.env:  ANDROID_CERT_SHA256=${sha1}`);
+}
 
 const outDir = resolve(env.OUT_DIR || join(repoRoot, 'deployment', local ? 'local' : 'prod', 'releases'));
 mkdirSync(outDir, { recursive: true });

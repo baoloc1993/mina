@@ -25,6 +25,7 @@ import {
 import * as api from '../auth/api';
 import { UnauthorizedError } from '../auth/api';
 import { EntitlementStore, type EntitlementCache } from '../entitlement/entitlement';
+import { noteAppOpen } from './appOpens';
 import { cancelAllOf, cancelNotification, listNotifications, onNotificationTap, restoreNotifications, scheduleNotification, takeLastNotificationTap } from '../native/notifications';
 import { APPS_DIR, createClock, downloadBytes, FILES_DIR, newScratch, nativeFs, uuid } from '../native/adapters';
 import { FileStore } from '../native/fileStore';
@@ -460,9 +461,13 @@ export class RuntimeImpl implements Runtime {
     const tables = await api.serverTablesOf(appId);
     let done = 0;
     for (const t of tables) {
+      let prevFirst = '';
       for (;;) {
         const ids = await api.liveIds(t, 0, 100);
         if (!ids.length) break;
+        // Không tiến triển (cùng dòng đầu còn sống sau một lượt xoá): dừng thay vì lặp vô hạn rồi đập vào trần tần suất.
+        if (ids[0] === prevFirst) throw new PackageError('INTERNAL', 'Không xoá hết được dữ liệu — thử lại sau');
+        prevFirst = ids[0];
         await api.uploadDeletes(t, ids);
         done += ids.length;
         onProgress?.(done);
@@ -533,6 +538,7 @@ export class RuntimeImpl implements Runtime {
   // ---------- mở app / vòng đời ----------
   openApp = async (appId: string): Promise<void> => {
     this.openStart.set(appId, Date.now());
+    noteAppOpen(getAppToken, appId); // đếm ngày dùng (H3) — không chặn việc mở app
     this.set({ blockedOpen: null, opening: appId });
     try {
       await this.openAppInner(appId);
@@ -668,7 +674,7 @@ export class RuntimeImpl implements Runtime {
 
   /** Giao lần bấm thông báo mà listener không bắt được (shell bị kill / vừa mở nguội) — mỗi lần bấm chỉ giao một lần. */
   private async deliverLastNotificationTap(): Promise<void> {
-    const t = await takeLastNotificationTap();
+    const t = await takeLastNotificationTap({ get: () => kvGet(this.db, 'last_tap_key'), set: (k) => kvSet(this.db, 'last_tap_key', k) });
     if (t) await this.openFromNotification(t.appId, t.ref);
   }
 

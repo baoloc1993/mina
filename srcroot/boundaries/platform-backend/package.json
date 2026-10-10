@@ -13,6 +13,7 @@
     "accept:calendar": "node scripts/accept-calendar.ts",
     "accept:news": "node scripts/accept-news.ts",
     "accept:ops": "node scripts/accept-ops.ts",
+    "smoke": "node scripts/smoke.ts",
     "ops:report": "node scripts/ops-report.ts",
     "ops:backup-files": "node scripts/ops-backup-files.ts",
     "ops:verify-restore": "node scripts/ops-verify-restore.ts"

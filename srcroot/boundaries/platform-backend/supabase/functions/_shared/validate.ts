@@ -24,3 +24,31 @@ export function clipRejectionData(data: unknown, maxChars = 4000): unknown {
   }
   return s.length <= maxChars ? data : { _clipped: true, chars: s.length, head: s.slice(0, 200) };
 }
+
+/**
+ * Đọc body dạng chữ NHƯNG dừng ngay khi vượt `max` BYTE (kể cả khi client gửi chunked, không có Content-Length) — `req.text()` sẽ đọc hết
+ * vào RAM rồi mới so (reviewer vòng 7). Trả `null` khi vượt trần (nên trả 413).
+ */
+export async function readTextLimited(body: ReadableStream<Uint8Array> | null, max: number): Promise<string | null> {
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    all.set(c, off);
+    off += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}

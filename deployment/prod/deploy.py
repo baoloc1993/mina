@@ -44,8 +44,8 @@ SECRET_NAMES = {"SUPABASE_ACCESS_TOKEN", "SUPABASE_DB_PASSWORD", "SUPABASE_SERVI
 
 
 class Deploy:
-    def __init__(self, env: dict[str, str], dry: bool, allow_dirty: bool) -> None:
-        self.env, self.dry, self.allow_dirty = env, dry, allow_dirty
+    def __init__(self, env: dict[str, str], dry: bool, allow_dirty: bool, skip_check: bool = False) -> None:
+        self.env, self.dry, self.allow_dirty, self.skip_check = env, dry, allow_dirty, skip_check
         self.sha = "dev"
 
     # ---------- tiện ích ----------
@@ -70,9 +70,15 @@ class Deploy:
             sys.exit(f"LỖI ở lệnh: {shown}\n{out.strip()[-1500:]}")
         return r
 
+    def mask(self, text: str) -> str:
+        for name in SECRET_NAMES:
+            if self.env.get(name):
+                text = text.replace(self.env[name], "***")
+        return text
+
     def api(self, method: str, url: str, headers: dict[str, str], body: dict | None = None) -> tuple[int, object]:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method, headers={"content-type": "application/json", **headers})
+        req = urllib.request.Request(url, data=data, method=method, headers={"content-type": "application/json", "user-agent": "mina-deploy/1 (+supabase-management-api)", **headers})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 raw = r.read().decode()
@@ -95,7 +101,7 @@ class Deploy:
         if not self.env["POWERSYNC_URL"].startswith("https://"):
             sys.exit("POWERSYNC_URL phải là https://")
         # Máy local / mạng nội bộ ở BẤT KỲ dạng nào: localhost, loopback v4/v6, host.docker.internal, 10.x, 172.16–31.x, 192.168.x, *.local
-        local_re = re.compile(r"(?i)(localhost|127\.\d+\.\d+\.\d+|\[::1\]|host\.docker\.internal|(^|[/@.])10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|\.local)")
+        local_re = re.compile(r"(?i)(localhost|127\.\d+\.\d+\.\d+|\[::1\]|host\.docker\.internal|(^|[/@.])10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|\.local\b)")
         for name in ("DATABASE_URL", "POWERSYNC_URL"):
             if local_re.search(self.env[name]):
                 sys.exit(f"{name} đang trỏ về máy local / mạng nội bộ")
@@ -113,8 +119,8 @@ class Deploy:
             sys.exit("Cây git còn thay đổi chưa commit ở srcroot/ — commit trước (GIT_SHA phải truy được), hoặc --allow-dirty:\n" + git.stdout[:600])
         self.sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, capture_output=True, text=True).stdout.strip() or "dev"
         self.say(f"preflight OK — project {ref}, GIT_SHA {self.sha}")
-        self.say("kiểm kiểu + build: make check")
-        if not self.dry:
+        self.say("kiểm kiểu + build: make check" + (" — BỎ QUA (--skip-check: chỉ dùng khi quay về tag đã xanh)" if self.skip_check else ""))
+        if not self.dry and not self.skip_check:
             r = subprocess.run(["make", "check"], cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode != 0:
                 sys.exit("make check đỏ — không deploy:\n" + (r.stdout + r.stderr)[-1200:])
@@ -127,6 +133,9 @@ class Deploy:
         self.say("migration chỉ CỘNG THÊM (BACKWARD-COMPATIBILITY §2); xem trước danh sách rồi áp")
         self.run([NPX, "--yes", SUPABASE_CLI, "db", "push", "--linked", "--dry-run"], BACKEND)
         self.run([NPX, "--yes", SUPABASE_CLI, "db", "push", "--linked"], BACKEND)
+        # Migration nuốt lỗi pg_cron (chỉ NOTICE) nên `db push` xanh dù thiếu job dọn → kiểm tường minh.
+        self.say("kiểm job pg_cron (purge-trashed-notes, purge-news-items, purge-rate-limits)")
+        self.run([NPM, "--silent", "run", "registry", "--", "cron-check"], BACKEND, {"REGISTRY_ENV": "prod"})
 
     def secrets(self) -> None:
         pairs = {
@@ -168,9 +177,18 @@ class Deploy:
             "mailer_otp_exp": 3600,
             "mailer_otp_length": 6,
         }
+        # Mẫu email có {{ .Token }} (mã 6 số): `config.toml` chỉ có tác dụng ở local — Cloud gửi mẫu mặc định chỉ có LINK, shell không đăng nhập được
+        # (bug-hunter vòng 7). Đẩy nội dung `templates/otp.html` + tiêu đề cho mẫu magic_link (người dùng đã có tài khoản) và confirmation.
+        tpl = (BACKEND / "supabase" / "templates" / "otp.html").read_text(encoding="utf-8")
+        template_keys = ("mailer_templates_magic_link_content", "mailer_templates_confirmation_content")
+        for k in template_keys:
+            want[k] = tpl
+        want["mailer_subjects_magic_link"] = "Mã đăng nhập"
+        want["mailer_subjects_confirmation"] = "Mã đăng nhập"
         url = f"https://api.supabase.com/v1/projects/{self.env['SUPABASE_PROJECT_REF']}/config/auth"
         hdr = {"authorization": f"Bearer {self.env['SUPABASE_ACCESS_TOKEN']}"}
-        self.say("PATCH " + url + " → " + ", ".join(f"{k}={v}" for k, v in want.items()))
+        self.say("PATCH " + url + " → " + ", ".join(f"{k}={v}" for k, v in want.items() if k not in template_keys))
+        self.say("   + mẫu email có {{ .Token }}: " + ", ".join(template_keys))
         if self.dry:
             return
         st, body = self.api("PATCH", url, hdr, want)
@@ -179,7 +197,11 @@ class Deploy:
         st, got = self.api("GET", url, hdr)
         if st != 200 or not isinstance(got, dict):
             sys.exit(f"GET auth config lỗi {st}")
-        bad = {k: (v, got.get(k)) for k, v in want.items() if got.get(k) != v}
+        def same(k: str, v: object) -> bool:
+            # Mẫu email: API có thể chuẩn hoá khoảng trắng → chỉ đòi còn đúng `{{ .Token }}` (mã 6 số), không so từng byte.
+            return ("{{ .Token }}" in str(got.get(k) or "")) if k in template_keys else got.get(k) == v
+
+        bad = {k: ("(muốn)" if k in template_keys else v, "(thực tế)" if k in template_keys else got.get(k)) for k, v in want.items() if not same(k, v)}
         if bad:
             sys.exit("Auth config chưa áp đúng (muốn, thực tế): " + json.dumps(bad, ensure_ascii=False))
         self.say("Auth config đã áp và đọc lại khớp: " + ", ".join(want))
@@ -198,13 +220,19 @@ class Deploy:
             if r.returncode != 0 and "VERSION_NOT_GREATER" in txt:
                 self.say(f"{name}: {app}@{ver} đã có trên production — bỏ qua publish")
             elif r.returncode != 0:
-                sys.exit(f"publish {name} lỗi:\n{txt[-1200:]}")
+                sys.exit(f"publish {name} lỗi:\n{self.mask(txt)[-1200:]}")
             p = self.run([NPM, "--silent", "run", "registry", "--", "promote", app, ver], BACKEND, env, check=False)
             ptxt = (p.stdout or "") + (p.stderr or "")
-            if p.returncode != 0 and "BAD_STATE" not in ptxt:
-                sys.exit(f"promote {name} lỗi:\n{ptxt[-800:]}")
+            if p.returncode != 0 and not ("BAD_STATE" in ptxt and "đang published" in ptxt):
+                # BAD_STATE vì bản đã `revoked` KHÔNG được coi là xong: production sẽ không có bản an toàn (bug-hunter vòng 7).
+                sys.exit(f"promote {name} lỗi:\n{self.mask(ptxt)[-800:]}")
         cfg = REPO / "deployment" / "local" / "seed" / "configs" / "vn.app.news.json"
-        self.run([NPM, "--silent", "run", "registry", "--", "set-config", "vn.app.news", str(cfg)], BACKEND, env)
+        # Không đè cấu hình đã chỉnh trên production: chỉ đặt khi chưa có (`{}`); muốn đổi dùng `registry set-config` tay.
+        cur = self.run([NPM, "--silent", "run", "registry", "--", "get-config", "vn.app.news"], BACKEND, env, check=False)
+        if self.dry or (cur.stdout or "").strip() in ("", "{}", "null"):
+            self.run([NPM, "--silent", "run", "registry", "--", "set-config", "vn.app.news", str(cfg)], BACKEND, env)
+        else:
+            self.say("vn.app.news đã có cấu hình trên production — giữ nguyên (không đè bằng bản seed local)")
         self.run([NPM, "--silent", "run", "registry", "--", "gen-sync-rules"], BACKEND, env)  # ghi deployment/prod/sync-rules.yaml
 
     def powersync(self) -> None:
@@ -272,19 +300,26 @@ def main() -> None:
     ap.add_argument("command", nargs="?", choices=["create-user"], help="create-user <email>")
     ap.add_argument("email", nargs="?")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--only", choices=STEPS)
+    ap.add_argument("--only", help="một hoặc nhiều bước, ngăn cách bằng dấu phẩy: " + ",".join(STEPS))
+    ap.add_argument("--skip-check", action="store_true", help="bỏ `make check` (chỉ khi quay về tag đã xanh — rollback)")
     ap.add_argument("--skip-android", action="store_true")
     ap.add_argument("--allow-dirty", action="store_true")
     ap.add_argument("--env-file", default=str(Path(__file__).parent / ".env"))
     a = ap.parse_args()
-    d = Deploy(load_env(Path(a.env_file)), a.dry_run, a.allow_dirty)
+    d = Deploy(load_env(Path(a.env_file)), a.dry_run, a.allow_dirty, a.skip_check)
     if a.command == "create-user":
         if not a.email:
             sys.exit("dùng: deploy.py create-user <email>")
         d.create_user(a.email)
         return
     d.preflight()
-    steps = [a.only] if a.only else [s for s in STEPS if not (s == "android" and a.skip_android)]
+    if a.only:
+        steps = [x.strip() for x in a.only.split(",") if x.strip()]
+        unknown = [x for x in steps if x not in STEPS]
+        if unknown:
+            sys.exit("--only: bước không có: " + ", ".join(unknown))
+    else:
+        steps = [s for s in STEPS if not (s == "android" and a.skip_android)]
     for s in steps:
         if s == "preflight":
             continue

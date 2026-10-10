@@ -115,9 +115,14 @@ export async function restoreNotifications(db: AbstractPowerSyncDatabase): Promi
   if (!rows.length) return;
   await init();
   for (const r of rows) {
-    if (r.os_id) await Notifications.cancelScheduledNotificationAsync(r.os_id).catch(() => undefined);
-    const osId = await osSchedule(r.app_id, { id: r.id.slice(r.app_id.length + 1), at: r.at, title: r.title, body: r.body, ref: r.ref });
-    await db.execute('UPDATE platform_notifications SET os_id = ? WHERE id = ?', [osId, r.id]);
+    // Từng dòng độc lập: một dòng hỏng không được làm cả loạt lời nhắc còn lại không được đặt lại (bug-hunter vòng 7).
+    try {
+      if (r.os_id) await Notifications.cancelScheduledNotificationAsync(r.os_id).catch(() => undefined);
+      const osId = await osSchedule(r.app_id, { id: r.id.slice(r.app_id.length + 1), at: r.at, title: r.title, body: r.body, ref: r.ref });
+      await db.execute('UPDATE platform_notifications SET os_id = ? WHERE id = ?', [osId, r.id]);
+    } catch (e) {
+      console.log('[notify] đặt lại thất bại', r.id, (e as Error).message);
+    }
   }
 }
 
@@ -145,11 +150,17 @@ export function onNotificationTap(cb: (info: TapInfo) => void): () => void {
  * Lần bấm đã MỞ shell từ trạng thái chết: phản hồi tới trước khi listener được gắn nên listener không thấy (dogfood vòng 7 — bấm thông báo
  * khi shell đã bị kill chỉ ra launcher). Hỏi `getLastNotificationResponse` sau khi khởi động xong; đã giao rồi (cùng khoá) thì bỏ qua.
  */
-export async function takeLastNotificationTap(): Promise<TapInfo | null> {
+export async function takeLastNotificationTap(persist?: { get(): Promise<string | null>; set(key: string): Promise<void> }): Promise<TapInfo | null> {
   const resp = await Notifications.getLastNotificationResponseAsync().catch(() => null);
   if (!resp) return null;
   const k = tapKey(resp);
   if (k === lastTapKey) return null;
+  // Android có thể giữ phản hồi cũ khi mở nguội lại từ recents: khoá đã giao được nhớ BỀN (qua lần khởi động) để không mở lại ref cũ.
+  if (persist && (await persist.get().catch(() => null)) === k) {
+    lastTapKey = k;
+    return null;
+  }
   lastTapKey = k;
+  await persist?.set(k).catch(() => undefined);
   return tapOf(resp);
 }

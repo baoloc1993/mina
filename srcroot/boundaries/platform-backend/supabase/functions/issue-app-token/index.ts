@@ -4,12 +4,13 @@
 import { SignJWT } from "npm:jose@5";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticate, decodeClaims, json } from "../_shared/auth.ts";
+import { log, serveLogged } from "../_shared/log.ts";
 import { enforceRate } from "../_shared/ratelimit.ts";
 import { asObject, parseAppId } from "../_shared/validate.ts";
 
 const encoder = new TextEncoder();
 
-Deno.serve(async (req) => {
+serveLogged("issue-app-token", async (req, rid) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   const caller = await authenticate(req);
   if (caller instanceof Response) return caller;
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
   });
   const { data: inst, error } = await sb.from("installations").select("enabled").eq("app_id", appId).maybeSingle();
   if (error) {
-    console.error("[issue-app-token]", error.message);
+    log("error", "issue-app-token", "installations_query_failed", { error: error.message }, rid);
     return json({ error: "INTERNAL" }, 500);
   }
   if (!inst || !inst.enabled) return json({ error: "APP_NOT_INSTALLED" }, 403);
@@ -54,9 +55,9 @@ Deno.serve(async (req) => {
   try {
     const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
     const { error: openErr } = await svc.rpc("record_app_open", { p_tenant: caller.tenantId, p_app: appId });
-    if (openErr) console.error("[issue-app-token] ghi app_opens_daily lỗi:", openErr.message);
+    if (openErr) log("error", "issue-app-token", "record_app_open_failed", { error: openErr.message }, rid);
   } catch (e) {
-    console.error("[issue-app-token] ghi app_opens_daily ngoại lệ:", e instanceof Error ? e.message : e);
+    log("error", "issue-app-token", "record_app_open_exception", { error: e instanceof Error ? e.message : String(e) }, rid);
   }
 
   return json({ token: jwt, expires_at: now + ttl });

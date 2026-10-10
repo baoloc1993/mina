@@ -3,6 +3,7 @@
 import { config } from '../config';
 import { PackageError, type CatalogResponse, type PackageErrorCode } from '../packages/types';
 import { catalogStatusError, UnauthorizedError } from './httpStatus';
+import { rateLimitDelayMs } from '../store/retryAfter';
 import { supabase } from './supabase';
 
 export { UnauthorizedError } from './httpStatus';
@@ -99,5 +100,10 @@ export async function uploadDeletes(table: string, ids: string[]): Promise<void>
   });
   if (res.status === 401) throw new UnauthorizedError('Phiên đăng nhập hết hiệu lực');
   if (res.status === 403) throw new PackageError('INTERNAL', 'READ_ONLY');
+  if (res.status === 429) {
+    const b = (await res.json().catch(() => ({}))) as { retry_after_s?: unknown };
+    await new Promise((r) => setTimeout(r, rateLimitDelayMs(res.headers.get('retry-after'), b.retry_after_s)));
+    throw new PackageError('OFFLINE', 'Máy chủ đang giới hạn tần suất — thử lại sau');
+  }
   if (!res.ok) throw new PackageError('INTERNAL', `upload HTTP ${res.status}`);
 }

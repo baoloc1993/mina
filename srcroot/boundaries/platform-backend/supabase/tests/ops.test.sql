@@ -71,5 +71,21 @@ select is((select count(*)::int from public.app_opens_daily), 1, 'B thấy đún
 select throws_ok($$select * from public.rate_limits$$, '42501', null, 'B KHÔNG đọc rate_limits');
 reset role;
 
+-- Ranh giới cửa sổ: dòng đếm của cửa sổ TRƯỚC (đã đầy 99) không được dồn sang cửa sổ hiện tại; sang cửa sổ mới đếm lại từ 1.
+insert into public.rate_limits (key, window_start, count)
+  values ('win:u', to_timestamp(floor(extract(epoch from now()) / 60) * 60) - interval '60 seconds', 99);
+select is((select hits from public.hit_rate_limit('win:u', 60, 3)), 1, 'cửa sổ mới đếm lại từ 1, không thừa hưởng 99 của cửa sổ trước');
+select is((select count(*)::int from public.rate_limits where key = 'win:u'), 2, 'cửa sổ cũ và mới là hai dòng riêng');
+-- Cửa sổ khác độ dài ⇒ ranh giới khác nhưng vẫn đếm đúng một dòng/khoá/cửa sổ.
+select is((select allowed from public.hit_rate_limit('win:v', 3600, 1)), true, 'cửa sổ 1 giờ: lần 1 qua');
+select is((select allowed from public.hit_rate_limit('win:v', 3600, 1)), false, 'cửa sổ 1 giờ: lần 2 bị chặn (trần 1)');
+
+-- purge: ranh giới 1 giờ — dòng 59 phút trước còn, 61 phút trước mất; dòng bị xoá không kéo theo dòng khác của cùng khoá.
+insert into public.rate_limits (key, window_start, count) values
+  ('edge:u', now() - interval '59 minutes', 5), ('edge:u', now() - interval '61 minutes', 5);
+select public.purge_rate_limits();
+select is((select count(*)::int from public.rate_limits where key = 'edge:u'), 1, 'purge giữ dòng 59 phút, xoá dòng 61 phút');
+select is((select count(*)::int from public.rate_limits where key = 'win:u'), 2, 'purge không đụng dòng cửa sổ hiện tại / vừa qua');
+
 select * from finish();
 rollback;

@@ -3,6 +3,7 @@
 // Đếm TRƯỚC khi xử lý: 429 nghĩa là chưa áp gì. Lỗi hạ tầng khi đếm → CHO QUA (không chặn người dùng vì bảng đếm hỏng).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { json } from "./auth.ts";
+import { log } from "./log.ts";
 
 export type RateFn = "upload" | "issue-app-token" | "catalog";
 export type HitResult = { allowed: boolean; retryAfterS: number };
@@ -34,7 +35,7 @@ export async function checkRate(store: RateStore, fn: RateFn, userId: string, ma
   try {
     return await store.hit(rateKey(fn, userId), windowS, max);
   } catch (e) {
-    console.error(`[ratelimit:${fn}] đếm lỗi, cho qua:`, e instanceof Error ? e.message : e);
+    log("error", fn, "ratelimit_count_failed_fail_open", { error: e instanceof Error ? e.message : String(e) });
     return { allowed: true, retryAfterS: 0 };
   }
 }

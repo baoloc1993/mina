@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { summarize } from "../ops-report.ts";
+import { summarize, vnToday } from "../ops-report.ts";
 
 const day = (d: string, opens = 1) => ({ day: d, opens, apps: ["vn.app.note"] });
 
@@ -24,4 +24,10 @@ test("summarize: phán quyết chỉ khi đủ 28 ngày; 24 ⇒ GO, 15..23 ⇒ P
   assert.match(summarize("2026-11-01", 28, mk(23)).verdict, /PIVOT/);
   assert.match(summarize("2026-11-01", 28, mk(15)).verdict, /PIVOT/);
   assert.match(summarize("2026-11-01", 28, mk(14)).verdict, /KILL/);
+});
+
+test("vnToday: theo giờ Việt Nam (UTC+7) — 16:59Z còn hôm nay, 17:00Z sang ngày mới", () => {
+  assert.equal(vnToday(Date.UTC(2026, 10, 1, 16, 59, 59)), "2026-11-01");
+  assert.equal(vnToday(Date.UTC(2026, 10, 1, 17, 0, 0)), "2026-11-02");
+  assert.equal(vnToday(Date.UTC(2026, 10, 1, 0, 0, 0)), "2026-11-01");
 });
