@@ -6,10 +6,10 @@
                                                 #   2 note thùng rác: còn 3 ngày + quá hạn). Mặc định KHÔNG làm — đợt 1 cần DB sạch (chưa có note).
 
   python deployment/local/seed/seed.py --calendar  # (vòng 5, dogfood đợt 2) thêm: cài Lịch cho cả 2 tenant + ~12 mục Lịch mẫu cho tenant-a
-                                                #   (srcroot/web-experiences/miniapp-calendar/scripts/seed-calendar.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
+                                                #   (miniapps/miniapp-calendar/scripts/seed-calendar.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
 
   python deployment/local/seed/seed.py --news   # (vòng 6, dogfood đợt 2) thêm: cài Đọc báo cho cả 2 tenant + 4 nguồn / ~60 bài / 1 grant cho tenant-a
-                                                #   (srcroot/web-experiences/miniapp-news/scripts/seed-news.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
+                                                #   (miniapps/miniapp-news/scripts/seed-news.mjs). Mặc định KHÔNG làm — đợt 1 cần DB sạch.
                                                 #   Feed giả cho emulator: python deployment/local/rss/serve.py (cổng 8787, emulator tới qua 10.0.2.2).
 
 Registry sau seed (vòng 3): hello (bản trong fixtures/miniapp-hello, published, cài cho cả 2 tenant) · hello-cal 0.1.0 (published,
@@ -26,17 +26,17 @@ import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-BACKEND = os.path.join(ROOT, "srcroot", "boundaries", "platform-backend")
-HELLO_FIXTURE = os.path.join(ROOT, "srcroot", "mobile-experiences", "shell", "fixtures", "miniapp-hello")
-FIXTURES = os.path.join(ROOT, "srcroot", "mobile-experiences", "shell", "fixtures")
+BACKEND = os.path.join(ROOT, "backend")
+HELLO_FIXTURE = os.path.join(ROOT, "mobile", "fixtures", "miniapp-hello")
+FIXTURES = os.path.join(ROOT, "mobile", "fixtures")
 HELLO_CAL_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-cal")
 HELLO_BAD_FIXTURE = os.path.join(FIXTURES, "miniapp-hello-bad-migration")
 PRIVATE_A = os.path.join(BACKEND, "fixtures", "private-a")
-NOTE_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-note")
+NOTE_APP = os.path.join(ROOT, "miniapps", "miniapp-note")
 NOTE_DIST = os.path.join(NOTE_APP, "dist")
-CAL_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-calendar")
+CAL_APP = os.path.join(ROOT, "miniapps", "miniapp-calendar")
 CAL_DIST = os.path.join(CAL_APP, "dist")
-NEWS_APP = os.path.join(ROOT, "srcroot", "web-experiences", "miniapp-news")
+NEWS_APP = os.path.join(ROOT, "miniapps", "miniapp-news")
 NEWS_DIST = os.path.join(NEWS_APP, "dist")
 NEWS_CONFIG = os.path.join(ROOT, "deployment", "local", "seed", "configs", "vn.app.news.json")
 BUILD = os.path.join(ROOT, "deployment", "local", ".build")
@@ -251,17 +251,17 @@ def seed() -> None:
     publish_fixture(stage_fixture("hello", HELLO_FIXTURE), "hello (fixtures/miniapp-hello)")
     publish_fixture(stage_fixture("hello-cal", HELLO_CAL_FIXTURE), "hello-cal 0.1.0 (fixtures/miniapp-hello-cal)")
     publish_fixture(PRIVATE_A, "private-a", owner=USERS[0])
-    publish_fixture(build_note_app(), "Ghi chú (vn.app.note, srcroot/web-experiences/miniapp-note/dist)")
+    publish_fixture(build_note_app(), "Ghi chú (vn.app.note, miniapps/miniapp-note/dist)")
     # Lịch (vn.app.calendar, vòng 5): chỉ publish khi gói đã dựng (dist/ do phiên khác viết); thiếu → cảnh báo, không lỗi.
     cal_dir = CAL_DIST if os.path.isfile(os.path.join(CAL_DIST, "manifest.json")) else None  # không tự build: gói đang được viết
     if cal_dir:
-        publish_fixture(cal_dir, "Lịch (vn.app.calendar, srcroot/web-experiences/miniapp-calendar/dist)")
+        publish_fixture(cal_dir, "Lịch (vn.app.calendar, miniapps/miniapp-calendar/dist)")
     else:
-        print("  CẢNH BÁO: chưa có srcroot/web-experiences/miniapp-calendar/dist (gói Lịch chưa dựng) — bỏ qua publish Lịch")
+        print("  CẢNH BÁO: chưa có miniapps/miniapp-calendar/dist (gói Lịch chưa dựng) — bỏ qua publish Lịch")
     # Đọc báo (vn.app.news, vòng 6) + cấu hình nguồn gợi ý từ server (registry set-config — không cần phát hành app)
     news_dir = build_web_app(NEWS_APP, NEWS_DIST, "Đọc báo")
     if news_dir:
-        publish_fixture(news_dir, "Đọc báo (vn.app.news, srcroot/web-experiences/miniapp-news/dist)")
+        publish_fixture(news_dir, "Đọc báo (vn.app.news, miniapps/miniapp-news/dist)")
         registry("set-config", "vn.app.news", NEWS_CONFIG)
         print("  set-config vn.app.news (8 báo gợi ý + network)")
     # Trần độ dài / giá trị hợp lệ của bảng Ghi chú + Lịch + Đọc báo ở server (migration 20261009000003/4/6) — chạy lại sau publish dựng bảng

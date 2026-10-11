@@ -9,7 +9,7 @@
 
 Biến lấy từ deployment/prod/.env (tên ở deployment/.env.example, hướng dẫn ở deployment/prod/README.md). Không in giá trị bí mật.
 Thứ tự bước: preflight → link → db → secrets → functions → auth → registry → powersync → health → android.
-Mọi bước idempotent: chạy lại sau khi lỗi giữa chừng là an toàn. Rollback: context/shared/DEPLOY.md §5.
+Mọi bước idempotent: chạy lại sau khi lỗi giữa chừng là an toàn. Rollback: deployment/prod/README.md.
 """
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-BACKEND = REPO / "srcroot" / "boundaries" / "platform-backend"
-WEB = REPO / "srcroot" / "web-experiences"
+BACKEND = REPO / "backend"
+WEB = REPO / "miniapps"
 MINIAPPS = [("Ghi chú", WEB / "miniapp-note"), ("Lịch", WEB / "miniapp-calendar"), ("Đọc báo", WEB / "miniapp-news")]
 FUNCTIONS = ["catalog", "issue-app-token", "upload", "health"]
 STEPS = ["preflight", "link", "db", "secrets", "functions", "auth", "registry", "powersync", "health", "android"]
@@ -114,9 +114,9 @@ class Deploy:
             sys.exit("SIGNING_KEY_PATH là tệp khoá local")
         if not Path(self.env["SIGNING_KEY_PATH"]).exists() and not self.dry:
             self.say(f"chưa có khoá ký ở {self.env['SIGNING_KEY_PATH']} — bước registry sẽ sinh bằng `registry keygen`")
-        git = subprocess.run(["git", "status", "--porcelain", "--", "srcroot", "deployment/prod"], cwd=REPO, capture_output=True, text=True)
+        git = subprocess.run(["git", "status", "--porcelain", "--", "backend", "mobile", "miniapps", "deployment/prod"], cwd=REPO, capture_output=True, text=True)
         if git.stdout.strip() and not self.allow_dirty:
-            sys.exit("Cây git còn thay đổi chưa commit ở srcroot/ — commit trước (GIT_SHA phải truy được), hoặc --allow-dirty:\n" + git.stdout[:600])
+            sys.exit("Cây git còn thay đổi chưa commit ở backend/, mobile/, miniapps/ — commit trước (GIT_SHA phải truy được), hoặc --allow-dirty:\n" + git.stdout[:600])
         self.sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, capture_output=True, text=True).stdout.strip() or "dev"
         self.say(f"preflight OK — project {ref}, GIT_SHA {self.sha}")
         self.say("kiểm kiểu + build: make check" + (" — BỎ QUA (--skip-check: chỉ dùng khi quay về tag đã xanh)" if self.skip_check else ""))
@@ -238,7 +238,7 @@ class Deploy:
     def powersync(self) -> None:
         rules = REPO / "deployment" / "prod" / "sync-rules.yaml"
         self.say(f"PowerSync Cloud: đẩy sync rules {rules.relative_to(REPO)} lên instance (dashboard hoặc CLI) — CHƯA tự động, xem DEPLOY.md §2 bước 7")
-        self.say("   Sau khi đẩy: đăng nhập app → S6 'Đồng bộ' phải báo đã đồng bộ; `make doctor` phần production kiểm instance.")
+        self.say("   Sau khi đẩy: đăng nhập app → S6 'Đồng bộ' phải báo đã đồng bộ.")
 
     def health(self) -> None:
         url = self.env["SUPABASE_URL"].rstrip("/") + "/functions/v1/health"
@@ -325,7 +325,7 @@ def main() -> None:
             continue
         print(f"\n── {s} " + "─" * (60 - len(s)))
         getattr(d, s)()
-    print("\nXong." + (" (dry-run: chưa đổi gì)" if a.dry_run else " Kế tiếp: context/shared/DEPLOY.md §6 — kiểm sau deploy."))
+    print("\nXong." + (" (dry-run: chưa đổi gì)" if a.dry_run else " Kế tiếp: kiểm sau deploy (deployment/prod/README.md)."))
 
 
 if __name__ == "__main__":

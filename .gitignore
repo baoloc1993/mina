@@ -39,7 +39,7 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
-# Go — chỉ bin/ ở GỐC repo (neo bằng "/"); stack khác cần commit thư mục bin/ thì xoá dòng này
+# Go
 /bin/
 *.test
 
@@ -52,6 +52,7 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
+
 
 # Local database
 *.sqlite

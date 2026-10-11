@@ -1,0 +1,28 @@
+{
+  "name": "@platform/miniapp-news",
+  "version": "0.1.10",
+  "private": true,
+  "description": "Mini app Đọc báo (vn.app.news) — vòng 6: nguồn RSS/Atom, đọc sau offline, lưu thành note, nhắc đọc, domain do người dùng cho phép",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/package.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev:mock": "npm run build && node ../../mobile/packages/miniapp-sdk/mock/run.mjs $(pwd)/dist"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "ajv": "^8.20.0",
+    "happy-dom": "^20.14.6",
+    "jsdom": "^26.1.0",
+    "typescript": "~6.0.3",
+    "vite": "^6.4.4",
+    "vitest": "^3.2.7"
+  }
+}
