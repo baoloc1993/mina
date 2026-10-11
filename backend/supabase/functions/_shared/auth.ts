@@ -1,6 +1,6 @@
 // Xác thực người gọi cho Edge Functions: hỏi GoTrue (không tự tin payload JWT chưa kiểm chữ ký).
 // GoTrue kiểm cả `auth.sessions` còn tồn tại → phiên đã bị `revoke_device` bị chặn ngay ở đây,
-// không phải chờ JWT hết hạn (DECISIONS vòng 2 — challenge pha I).
+// không phải chờ JWT hết hạn.
 
 export type Caller = { token: string; tenantId: string; userId: string };
 

@@ -1,6 +1,6 @@
 // Driver SQLite WASM cho trình duyệt. DB nằm trong bộ nhớ; sau mỗi lần ghi, ảnh chụp DB (serialize) được lưu vào
 // IndexedDB theo khoá `<appId>` để tải lại trang không mất dữ liệu. Không có IndexedDB → chỉ dùng bộ nhớ.
-// (OPFS cần Worker + SharedArrayBuffer/COOP-COEP — bỏ để mock chạy được bằng một lệnh; xem DECISIONS.)
+//
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlDriver } from './db';
 

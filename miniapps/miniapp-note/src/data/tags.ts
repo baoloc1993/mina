@@ -1,4 +1,4 @@
-// Tag dùng chung (`core_tags`) + liên kết note↔tag (`note_tags`). Quy ước gộp theo tên ở PHÍA APP (DECISIONS vòng 4): tên đã trim + hạ
+// Tag dùng chung (`core_tags`) + liên kết note↔tag (`note_tags`). Quy ước gộp theo tên ở PHÍA APP: tên đã trim + hạ
 // chữ thường (KHÔNG bỏ dấu: "Việc" ≠ "Viec"); hai máy cùng tạo "việc nhà" lúc offline → hai dòng `core_tags` → hiển thị một.
 import { errCode, newId, type Sdk } from '../sdk';
 

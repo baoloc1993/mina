@@ -126,7 +126,7 @@ interface Resolved {
 
 /**
  * Với mỗi bài của feed, quyết id dùng được: lần lượt `itemId(feed, guid, 0..2)`; dòng SỐNG ⇒ `live` (UPDATE nhẹ), dòng đã xoá mềm ⇒
- * thử id kế (một dòng đã xoá không hồi sinh được — DECISIONS vòng 6), chưa có ⇒ `new`. Cả ba id đã xoá ⇒ `blocked` (bỏ qua bài).
+ * thử id kế, chưa có ⇒ `new`. Cả ba id đã xoá ⇒ `blocked` (bỏ qua bài).
  */
 export async function resolveIds(sdk: Sdk, feedUrl: string, items: ParsedItem[]): Promise<Resolved[]> {
   // Muối = tenant (SDK 0.1.3): khoá chính `items.id` là toàn cục nên hai tenant đọc cùng một báo KHÔNG được ra cùng id

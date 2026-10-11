@@ -1,4 +1,4 @@
-// Smoke test luồng lõi phía server (vòng 7 — gate P2 "smoke test pass"; PRODUCTION-READY nhóm 3). Chạy được ở local VÀ production:
+// Smoke test luồng lõi phía server. Chạy được ở local VÀ production:
 //   npm run smoke                              (local docker: http://127.0.0.1:54321, tài khoản smoke-a/b@test.local)
 //   REGISTRY_ENV=prod npm run smoke -- --a <email tenant-test A> --b <email tenant-test B>     (đọc deployment/prod/.env)
 // Hai tài khoản THỬ (không phải tài khoản dữ liệu thật của P1). Script tự tạo user bằng admin API (production tắt tự đăng ký),

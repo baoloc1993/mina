@@ -1,4 +1,4 @@
-// Logic thuần của "domain do người dùng cho phép" (vòng 6, hợp đồng `net-user-approved` + `app-config`, ARCHITECTURE.md §5).
+// Logic thuần của "domain do người dùng cho phép".
 // Runtime chỉ làm hiệu ứng (đọc/ghi bảng core_net_grants, hộp thoại); mọi quyết định "host nào cho vào whitelist" nằm ở đây để kiểm bằng Jest.
 import { isValidHost } from '../bridge/netGuard';
 

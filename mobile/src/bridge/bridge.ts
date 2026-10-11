@@ -1,4 +1,4 @@
-// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0 (SDK 0.1.3, ARCHITECTURE.md §5).
+// Bridge JSON-RPC 2.0 — contract miniapp-sdk-v0.
 // THUẦN TS: shell và mock SDK trên trình duyệt chạy CÙNG mã này, mọi hiệu ứng đi qua `Host`.
 // Thứ tự kiểm (bất biến): request hợp lệ → method có thật → scope → chỉ đọc → tham số → thực thi.
 // Từ chối ở bước nào thì KHÔNG có tác dụng phụ (Host không được gọi lần nào) — bảng kỳ vọng `matrix.ts` canh điều này.
@@ -449,7 +449,7 @@ const METHODS: Record<string, MethodDef> = {
     run: async (ctx, raw) => ctx.host.ui.pickImage({ multiple: raw.multiple === true }),
   },
   'ui.pickFile': {
-    // SDK 0.1.1 — thêm vào dòng 0.x ở mức patch (DECISIONS 2026-10-09) để range `^0.1` của app cũ vẫn chứa SDK.
+    // SDK 0.1.1 — thêm vào dòng 0.x ở mức patch để range `^0.1` của app cũ vẫn chứa SDK.
     scopes: ['ui.native', 'storage.files'],
     write: () => true,
     run: async (ctx, raw) => {

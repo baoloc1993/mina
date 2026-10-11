@@ -1,5 +1,5 @@
 // Build ra SCRIPT CỔ ĐIỂN (IIFE) `dist/app.js` + `dist/app.css` — KHÔNG module ES: shell nạp HTML bằng source={{html, baseUrl}} với
-// allowFileAccessFromFileURLs=false nên <script type="module"> từ file:// bị chặn (DECISIONS 2026-10-09). scripts/package.mjs hoàn tất
+// allowFileAccessFromFileURLs=false nên <script type="module"> từ file:// bị chặn. scripts/package.mjs hoàn tất
 // thư mục dist/ (index.html, manifest, migrations, icon, tokens.css) — đó là thư mục `registry publish` / mock SDK nhận.
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';

@@ -11,7 +11,7 @@ export interface SqlDriver {
 
 export const SYSTEM_COLUMNS = ['tenant_id', 'created_at', 'updated_at', 'deleted_at'] as const;
 
-/** Bảng dùng chung (ARCHITECTURE.md §6) — cột cố ý đủ cho các câu SQL cố định của bridge. */
+/** Bảng dùng chung — cột cố ý đủ cho các câu SQL cố định của bridge. */
 export const CORE_DDL = `
 CREATE TABLE IF NOT EXISTS core_tags (
   id text PRIMARY KEY, tenant_id text, name text NOT NULL, color text,

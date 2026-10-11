@@ -1,4 +1,4 @@
-// Mở rộng quy tắc lặp — hàm THUẦN `occurrences(event, overrides, from, to, env)` (ARCHITECTURE.md §6 "Mở rộng quy tắc lặp").
+// Mở rộng quy tắc lặp — hàm THUẦN `occurrences(event, overrides, from, to, env)`.
 // Không lưu từng lần lặp: mỗi mục là một quy tắc + các ngoại lệ "chỉ lần này". Lần xuất hiện được định danh bằng `occ_date`
 // (ngày dương trong KHUNG của sự kiện: giờ treo → ngày theo máy, giờ cố định → ngày theo múi giờ gốc) nên ổn định giữa các máy.
 import { ALL_DAY_NOTIFY_TIME, type EditPatch, type EventRow, type OverrideRow } from './model';

@@ -1,4 +1,4 @@
-// Âm–dương lịch Việt Nam (múi giờ cố định UTC+7), tự hiện thực — KHÔNG dùng thư viện ngoài (DECISIONS vòng 5).
+// Âm–dương lịch Việt Nam (múi giờ cố định UTC+7), tự hiện thực — KHÔNG dùng thư viện ngoài.
 // Thuật toán thiên văn (điểm sóc + kinh độ Mặt Trời) theo Hồ Ngọc Đức; phạm vi hỗ trợ 1901–2099.
 // Thuần: không đụng DOM, không Date theo múi giờ máy — vào/ra là bộ (năm, tháng, ngày) dương lịch Gregorian.
 // Lịch Việt Nam +7 khác lịch Trung Quốc +8 ở vài năm (1985, 1997, 2007…) nên không dùng được gói lịch Trung Quốc.

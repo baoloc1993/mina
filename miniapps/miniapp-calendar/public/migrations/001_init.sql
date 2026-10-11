@@ -1,6 +1,6 @@
 -- Lịch (vn.app.calendar) 0.1.0 — table_prefix mặc định: app_vn_app_calendar (id đổi "." thành "_").
 -- Kiểu cột chạy được trên cả Postgres lẫn SQLite; cột hệ thống (tenant_id, created_at, updated_at, deleted_at) do shell / CLI tự thêm.
--- Không lưu từng lần lặp: `events` giữ QUY TẮC, `event_overrides` giữ ngoại lệ "chỉ lần này" (ARCHITECTURE.md §6).
+-- Không lưu từng lần lặp: `events` giữ QUY TẮC, `event_overrides` giữ ngoại lệ "chỉ lần này".
 -- Mọi cột epoch là bigint (bài học `at integer` tràn int4 của hello-cal).
 CREATE TABLE IF NOT EXISTS app_vn_app_calendar_events (
   id text PRIMARY KEY,

@@ -1,4 +1,4 @@
-// Phân tích RSS 2.0 / Atom 1.0 / RSS 1.0 (RDF) bằng `DOMParser` của WebView — không thư viện feed (DECISIONS 2026-10-09).
+// Phân tích RSS 2.0 / Atom 1.0 / RSS 1.0 (RDF) bằng `DOMParser` của WebView — không thư viện feed.
 // Thuần: nhận chuỗi XML, trả bài đã làm sạch. Không lưu toàn văn: tóm tắt = mô tả bỏ thẻ HTML, cắt 2 000 ký tự.
 import { safeHttpUrl } from './url';
 

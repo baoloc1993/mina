@@ -1,4 +1,4 @@
-// Thông báo = ĐỐI CHIẾU, không phải sự kiện (ARCHITECTURE.md §6 "Đối chiếu thông báo", DECISIONS vòng 5).
+// Thông báo = ĐỐI CHIẾU, không phải sự kiện.
 // Hai hàm thuần: `desiredNotifications` tính tập thông báo mong muốn, `planNotify` so với `notify.list()` → schedule / cancel.
 // Chạy lại bao nhiêu lần cũng cho cùng kết quả (idempotent) nên mọi đường kích hoạt (mở app, resume, lưu, sync, shell nạp nền) dùng chung.
 import { addDays, splitLocal } from '../recur/dates';

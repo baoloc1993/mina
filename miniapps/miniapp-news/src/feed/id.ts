@@ -1,4 +1,4 @@
-// Id bài TẤT ĐỊNH (ARCHITECTURE.md §6): hai máy tải cùng một bài ra cùng một `id` ⇒ `upload` gộp thay vì nhân đôi.
+// Id bài TẤT ĐỊNH: hai máy tải cùng một bài ra cùng một `id` ⇒ `upload` gộp thay vì nhân đôi.
 // Hash 128 bit thuần JS (cyrb128) của `tenant_id|feed_url|guid` ép khuôn UUID v4 — không dùng crypto.randomUUID (không tất định).
 
 function cyrb128(str: string): [number, number, number, number] {

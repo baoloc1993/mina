@@ -1,6 +1,6 @@
 -- Đọc báo (vn.app.news) 0.1.0 — table_prefix mặc định: app_vn_app_news (id đổi "." thành "_").
 -- Kiểu cột chạy được trên cả Postgres lẫn SQLite; cột hệ thống (tenant_id, created_at, updated_at, deleted_at) do shell / CLI tự thêm.
--- KHÔNG lưu toàn văn bài: `items` chỉ có tiêu đề + tóm tắt (đã bỏ thẻ HTML) + liên kết (ARCHITECTURE.md §6).
+-- KHÔNG lưu toàn văn bài: `items` chỉ có tiêu đề + tóm tắt (đã bỏ thẻ HTML) + liên kết.
 -- `items.id` là UUID TẤT ĐỊNH từ feed_url|guid (hai máy tải cùng bài ra cùng dòng). Mọi cột epoch là bigint.
 CREATE TABLE IF NOT EXISTS app_vn_app_news_sources (
   id text PRIMARY KEY,

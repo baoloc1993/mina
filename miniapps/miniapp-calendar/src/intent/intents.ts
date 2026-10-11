@@ -1,4 +1,4 @@
-// Intent của Lịch (ARCHITECTURE.md §5 `intent-calendar`). Shell đã kiểm schema (ajv); ở đây kiểm lại tối thiểu vì dữ liệu đến từ app khác.
+// Intent của Lịch. Shell đã kiểm schema (ajv); ở đây kiểm lại tối thiểu vì dữ liệu đến từ app khác.
 import { isLocal } from '../recur/dates';
 import { UUID_RE } from '../sdk';
 import type { ReminderPayload } from '../data/repo';

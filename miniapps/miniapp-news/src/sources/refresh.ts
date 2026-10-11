@@ -1,4 +1,4 @@
-// Thêm nguồn và làm mới feed (ARCHITECTURE.md §6 "Thêm nguồn" / "Làm mới feed"). Thuần logic trên `window.miniapp`.
+// Thêm nguồn và làm mới feed. Thuần logic trên `window.miniapp`.
 import { NotFeedError, parseFeed } from '../feed/parse';
 import { normalizeFeedUrl } from '../feed/url';
 import { markSourceError, insertSourceWithItems, MAX_SOURCES, upsertItems, type SourceGroup, type SourceRow } from '../data/repo';

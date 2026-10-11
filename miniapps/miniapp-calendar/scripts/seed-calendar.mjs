@@ -1,4 +1,4 @@
-// Sinh SQL dữ liệu mẫu Lịch cho dogfood đợt 2 (PRD §7 "Dữ liệu mẫu"): ~12 mục tiếng Việt có dấu — giỗ/rằm lặp âm lịch, lời nhắc hằng ngày,
+// Sinh SQL dữ liệu mẫu Lịch cho dogfood đợt 2: ~12 mục tiếng Việt có dấu — giỗ/rằm lặp âm lịch, lời nhắc hằng ngày,
 // họp tuần giờ cố định, sự kiện có báo trước, lời nhắc từ Ghi chú, mục đã xoá mềm, ngoại lệ "chỉ lần này" (edit + skip), chuỗi lặp ngày 400 ngày.
 // Dùng:  node scripts/seed-calendar.mjs <tenant_id> > calendar.sql   (rồi psql < calendar.sql). Chạy lại an toàn (ON CONFLICT DO NOTHING).
 // id tất định theo (tenant, tên) — chạy lại không nhân đôi; ngày tuyệt đối tính từ HÔM NAY (giờ máy chạy script). KHÔNG tính âm lịch ở đây:

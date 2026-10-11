@@ -1,5 +1,5 @@
-// Kiểu dùng chung của bridge (contract miniapp-sdk-v0, ARCHITECTURE.md §5). THUẦN TS — không import React Native,
-// vì mock SDK trên trình duyệt chạy đúng mã này (DECISIONS 2026-10-08).
+// Kiểu dùng chung của bridge. THUẦN TS — không import React Native,
+// vì mock SDK trên trình duyệt chạy đúng mã này.
 
 export type ErrorCode =
   | 'INVALID_REQUEST'
@@ -34,7 +34,7 @@ export interface IntentReceive extends IntentSend {
   schema: unknown;
 }
 
-/** manifest.json v0 đủ (ARCHITECTURE.md §5 `miniapp-manifest`). */
+/** manifest.json v0 đủ. */
 export interface Manifest {
   id: string; // reverse-domain, vd "vn.app.hello"
   name: string;

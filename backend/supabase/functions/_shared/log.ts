@@ -1,4 +1,4 @@
-// Log có cấu trúc cho Edge Functions (vòng 7, PRODUCTION-READY nhóm 1): mỗi dòng là MỘT object JSON
+// Log có cấu trúc cho Edge Functions: mỗi dòng là MỘT object JSON
 // { ts, level, fn, event, rid, … } — lọc được trong Supabase Dashboard → Logs, lần lại một request bằng `rid` (cũng trả ở header
 // `x-request-id`). KHÔNG bao giờ ghi token / khoá / mật khẩu / header Authorization / nội dung dữ liệu người dùng.
 export type Level = "info" | "warn" | "error";

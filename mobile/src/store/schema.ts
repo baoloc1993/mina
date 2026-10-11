@@ -1,4 +1,4 @@
-// Schema PowerSync sinh động (ARCHITECTURE.md §6): bảng nền (installations, sync_rejections, core_*) + bảng của các app
+// Schema PowerSync sinh động: bảng nền (installations, sync_rejections, core_*) + bảng của các app
 // đã cài (suy ra từ migration trong gói) + bảng cục bộ `platform_*` (không sync). Cài/gỡ app ⇒ dựng lại và `updateSchema`.
 import { Schema, Table, column } from '@powersync/common';
 import type { AppRow, ColumnKind, TableDef } from '../packages/types';

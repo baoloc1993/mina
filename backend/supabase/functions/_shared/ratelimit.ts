@@ -1,4 +1,4 @@
-// Trần số lần gọi mỗi phút theo user (vòng 7, DECISIONS "Rate limit trong Postgres"). Logic thuần + cổng `RateStore`
+// Trần số lần gọi mỗi phút theo user. Logic thuần + cổng `RateStore`
 // để test không cần DB; `makeRateStore` nối vào hàm SQL `hit_rate_limit()` (chỉ service role gọi được).
 // Đếm TRƯỚC khi xử lý: 429 nghĩa là chưa áp gì. Lỗi hạ tầng khi đếm → CHO QUA (không chặn người dùng vì bảng đếm hỏng).
 import { createClient } from "npm:@supabase/supabase-js@2";

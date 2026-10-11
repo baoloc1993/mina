@@ -1,4 +1,4 @@
-// Sinh SQL dữ liệu mẫu cho dogfood đợt 2 (PRD §7 "Dữ liệu mẫu"): ~30 ghi chú tiếng Việt có dấu, checklist, tag, đính kèm giả,
+// Sinh SQL dữ liệu mẫu cho dogfood đợt 2: ~30 ghi chú tiếng Việt có dấu, checklist, tag, đính kèm giả,
 // 1 note có 250 dòng note_blocks (kiểm gộp), 2 note thùng rác (còn 3 ngày + quá hạn để kiểm job server).
 // Dùng:  node scripts/seed-notes.mjs <tenant_id> [số_note] > notes.sql   (rồi psql < notes.sql). Chạy lại an toàn (ON CONFLICT DO NOTHING).
 // id tất định theo (tenant, số thứ tự) nên chạy lại không nhân đôi. Nội dung Yjs dựng đúng schema của trình soạn (TipTap).

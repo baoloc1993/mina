@@ -11,7 +11,7 @@ export interface GuardContext {
   prefix: string; // vd "app_hello_"
   tenantId: string;
   now: string; // ISO
-  /** SELECT mặc định tự lọc dòng đã xoá mềm; {includeDeleted: true} tắt bộ lọc (DECISIONS 2026-10-08). */
+  /** SELECT mặc định tự lọc dòng đã xoá mềm; {includeDeleted: true} tắt bộ lọc. */
   includeDeleted?: boolean;
 }
 export interface Guarded {

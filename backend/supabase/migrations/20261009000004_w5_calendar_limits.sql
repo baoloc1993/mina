@@ -2,7 +2,7 @@
 -- Cùng lý do với W4 (20261009000003): bảng `app_vn_app_*` do `registry publish` dựng, lint của CLI không cho `ADD CONSTRAINT` trong migration
 -- của app, nên ràng buộc đặt ở ĐÂY dưới dạng hàm idempotent. Chạy ngay khi có bảng và PHẢI chạy lại sau mỗi lần `registry publish` dựng bảng
 -- (seed gọi sau publish; deploy vòng 7 gọi sau `registry publish`). NOT VALID: chỉ kiểm dòng mới/sửa. Bảng chưa tồn tại → bỏ qua, không lỗi.
--- Vi phạm → `upload` trả REJECTED/SCHEMA (ARCHITECTURE.md §5 `api-upload`). Giá trị NULL luôn qua CHECK (cột tuỳ chọn).
+-- Vi phạm → `upload` trả REJECTED/SCHEMA. Giá trị NULL luôn qua CHECK (cột tuỳ chọn).
 
 create or replace function public.ensure_calendar_limits() returns integer
 language plpgsql security definer set search_path = public, pg_temp as $$

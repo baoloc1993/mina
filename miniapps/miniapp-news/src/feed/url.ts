@@ -1,4 +1,4 @@
-// Chuẩn hoá địa chỉ nguồn người dùng dán (ARCHITECTURE.md §6 "Thêm nguồn"): chỉ http(s), bỏ #, không user:pass@, host đúng khuôn
+// Chuẩn hoá địa chỉ nguồn người dùng dán: chỉ http(s), bỏ #, không user:pass@, host đúng khuôn
 // mà `net.requestAccess` nhận (chữ thường, không wildcard, cổng tuỳ chọn).
 export const MAX_URL = 2048;
 const HOST_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/;

@@ -1,4 +1,4 @@
-// Sinh SQL dữ liệu mẫu Đọc báo cho dogfood đợt 2 (PRD §7 "Dữ liệu mẫu"): tenant-a có 4 nguồn (2 gợi ý + 1 dán URL có grant + 1 feed giả lỗi),
+// Sinh SQL dữ liệu mẫu Đọc báo cho dogfood đợt 2: tenant-a có 4 nguồn (2 gợi ý + 1 dán URL có grant + 1 feed giả lỗi),
 // ~60 bài (10 đã đọc, 6 đọc sau — 2 của nguồn đã bỏ, 3 quá 30 ngày chưa lưu, 1 đã lưu thành note) và 1 grant.
 // Dùng:  node scripts/seed-news.mjs <tenant_id> > news.sql   (rồi psql < news.sql). Chạy lại an toàn (ON CONFLICT DO NOTHING).
 import { createHash } from 'node:crypto';

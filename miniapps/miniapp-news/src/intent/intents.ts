@@ -1,4 +1,4 @@
-// Intent của Đọc báo (ARCHITECTURE.md §5 `intent-news`). Shell đã kiểm schema (ajv); ở đây kiểm lại tối thiểu vì dữ liệu đến từ app khác.
+// Intent của Đọc báo. Shell đã kiểm schema (ajv); ở đây kiểm lại tối thiểu vì dữ liệu đến từ app khác.
 import { UUID_RE } from '../sdk';
 import type { ItemRow } from '../data/repo';
 

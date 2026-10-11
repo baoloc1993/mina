@@ -1,5 +1,5 @@
 // Kiểm gói mini app (AC-2): SHA-256 → chữ ký Ed25519 → sdk range → giải nén an toàn → lint manifest + migration.
-// Chữ ký = Ed25519 trên 32 byte SHA-256 THÔ của zip; public_key = base64 của 32 byte khoá thô (DECISIONS vòng 2).
+// Chữ ký = Ed25519 trên 32 byte SHA-256 THÔ của zip; public_key = base64 của 32 byte khoá thô.
 import * as ed from '@noble/ed25519';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';

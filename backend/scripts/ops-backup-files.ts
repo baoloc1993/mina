@@ -3,7 +3,7 @@
 //   npm run ops:backup-files                         (local: deployment/local/backups/files)
 //   REGISTRY_ENV=prod npm run ops:backup-files       (production: deployment/prod/backups/files)
 // Tăng dần: chỉ tải file mới / đổi kích thước; ghi `manifest.json` {path, size, sha256, fetched_at}. Không xoá file đã sao lưu
-// khi nguồn mất (đó chính là lúc cần bản sao). Chạy mỗi tuần (DEPLOY.md §8) và trước mỗi lần thay đổi lớn.
+// khi nguồn mất (đó chính là lúc cần bản sao). Chạy mỗi tuần và trước mỗi lần thay đổi lớn.
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";

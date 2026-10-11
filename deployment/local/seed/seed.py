@@ -1,4 +1,4 @@
-"""Seed local (PRD §7): 2 tenant (a@test.local, b@test.local) + registry vòng 2.
+"""Seed local: 2 tenant (a@test.local, b@test.local) + registry vòng 2.
 
   python deployment/local/seed/seed.py          # user + khoá ký thử + publish hello / private-a + cài + sync rules + 20 mục hello mỗi tenant
   python deployment/local/seed/seed.py --clean  # xoá mục + 2 user thử (cascade installations/devices); registry giữ nguyên

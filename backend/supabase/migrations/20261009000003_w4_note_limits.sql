@@ -4,7 +4,7 @@
 -- Bảng `app_vn_app_note_*` do `registry publish` dựng và lint của CLI không cho `ADD CONSTRAINT` trong migration của app, nên ràng buộc đặt ở
 -- ĐÂY dưới dạng hàm idempotent `ensure_note_limits()`: chạy ngay khi có bảng, và PHẢI chạy lại sau mỗi lần publish dựng bảng mới
 -- (seed gọi sau publish; deploy vòng 7 gọi sau `registry publish`). NOT VALID: chỉ kiểm dòng mới/sửa, không quét dữ liệu cũ.
--- Vi phạm → `upload` trả REJECTED/SCHEMA (ARCHITECTURE.md §5 `api-upload`).
+-- Vi phạm → `upload` trả REJECTED/SCHEMA.
 
 create or replace function public.ensure_note_limits() returns integer
 language plpgsql security definer set search_path = public, pg_temp as $$

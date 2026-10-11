@@ -159,7 +159,7 @@ mkdirSync(outDir, { recursive: true });
 const name = `mina-${local ? 'local' : 'prod'}-${versionCode}-${gitSha}.apk`;
 const dest = join(outDir, name);
 copyFileSync(apk, dest);
-// Giữ 2 bản ký gần nhất (rollback shell = cài lại bản trước — DECISIONS C3).
+// Giữ 2 bản ký gần nhất.
 const kept = readdirSync(outDir).filter((f) => f.startsWith(`mina-${local ? 'local' : 'prod'}-`) && f.endsWith('.apk'))
   .map((f) => ({ f, t: statSync(join(outDir, f)).mtimeMs })).sort((a, b) => b.t - a.t);
 for (const old of kept.slice(2)) unlinkSync(join(outDir, old.f));

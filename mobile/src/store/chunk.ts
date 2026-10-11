@@ -1,4 +1,4 @@
-// Chia lô upload ≤ 100 thay đổi (AC-10; DECISIONS vòng 2: MAX_OPS của `upload` = 100).
+// Chia lô upload ≤ 100 thay đổi.
 export const UPLOAD_BATCH = 100;
 
 export function chunk<T>(xs: T[], n: number): T[][] {

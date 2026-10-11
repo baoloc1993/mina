@@ -1,5 +1,5 @@
 // Kiểu và lối vào duy nhất tới nền tảng: `window.miniapp` do shell tiêm vào (SDK 0.1.1). Mini app KHÔNG dùng fetch / localStorage /
-// IndexedDB trực tiếp (PRD §5) — mọi dữ liệu đi qua SDK. Kiểu lấy từ d.ts của SDK (chỉ kiểu, không có mã chạy).
+// IndexedDB trực tiếp — mọi dữ liệu đi qua SDK. Kiểu lấy từ d.ts của SDK (chỉ kiểu, không có mã chạy).
 export type Sdk = Window['miniapp'];
 
 export function getSdk(): Sdk {

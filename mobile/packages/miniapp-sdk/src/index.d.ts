@@ -1,4 +1,4 @@
-// Kiểu TypeScript cho `window.miniapp` — SDK v0 (@platform/miniapp-sdk 0.1.3, ARCHITECTURE.md §5 `miniapp-sdk-v0`).
+// Kiểu TypeScript cho `window.miniapp` — SDK v0.
 // Dùng: `/// <reference types="@platform/miniapp-sdk/types" />` hoặc `import type {} from '@platform/miniapp-sdk/types'`.
 
 export type MiniappErrorCode =

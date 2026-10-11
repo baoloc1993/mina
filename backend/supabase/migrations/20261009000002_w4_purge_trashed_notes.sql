@@ -1,4 +1,4 @@
--- Vòng 4 (W4) — dọn thùng rác Ghi chú phía server (AC-1, DECISIONS 2026-10-09 "Thùng rác").
+-- Vòng 4 (W4) — dọn thùng rác Ghi chú phía server.
 -- Cộng thêm duy nhất: hàm `purge_trashed_notes()` + job pg_cron hằng ngày. Không đụng bảng/API đã giao ở vòng 1–3.
 --
 -- Bảng của app Ghi chú (`app_vn_app_note_*`) chỉ tồn tại sau khi `registry publish` gói `vn.app.note` chạy migration của gói,

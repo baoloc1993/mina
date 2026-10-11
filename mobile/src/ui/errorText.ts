@@ -1,4 +1,4 @@
-// Mã lỗi → câu tiếng Việt dễ hiểu + mã trong ngoặc (PRD §7 "Trạng thái lỗi", DESIGN-SYSTEM §5). Giọng trung tính.
+// Mã lỗi → câu tiếng Việt dễ hiểu + mã trong ngoặc. Giọng trung tính.
 // Mã giữ tiếng Anh in hoa như contract (ARCHITECTURE §5). Thuần TS.
 
 const SENTENCES: Record<string, string> = {
