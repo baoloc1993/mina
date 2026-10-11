@@ -1,6 +1,5 @@
 # Mina — an offline-first "super-app shell" with sandboxed mini apps
 
-[![check](https://github.com/baoloc1993/mina/actions/workflows/check.yml/badge.svg)](https://github.com/baoloc1993/mina/actions/workflows/check.yml)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
 Mina is an Android app (Expo / React Native) that works like a small app store and runtime in one: it downloads
@@ -352,7 +351,7 @@ Errors are `Error` objects with a `.code`: `INVALID_REQUEST`, `SCOPE_DENIED`, `S
 | Mobile shell | Expo 57 / React Native 0.86, TypeScript, `@op-engineering/op-sqlite` (SQLCipher), `react-native-webview`, `@noble/ed25519`, `ajv`, Jest |
 | SDK + mock | TypeScript, design tokens, Vite + SQLite WASM, Vitest |
 | Mini apps | React 19 + Vite, TipTap + Yjs (Notes), Vitest |
-| Tooling | GNU Make, Docker Compose, Python 3 (seed and deploy scripts), GitHub Actions |
+| Tooling | GNU Make, Docker Compose, Python 3 (seed and deploy scripts) |
 
 ## Getting started
 
@@ -462,9 +461,7 @@ What each suite covers, and what I actually ran for this README (Windows 11, Nod
 | pgTAP (RLS, platform, limits, grants, ops) | `make test` (runs `supabase test db`) | **not run** for this README (needs the Docker stack) |
 | HTTP acceptance (`make accept`) | after `make dev` and `make seed` | **not run** for this README |
 
-The unit suites need no Docker. GitHub Actions runs the cheap, dependency-light subset on every push (see
-[`.github/workflows/check.yml`](.github/workflows/check.yml)): CLI tests, CLI typecheck, Deno function tests and the
-Python deploy tests. It does not run the database, emulator or mobile suites.
+The unit suites need no Docker. There is no CI yet: everything above is run locally (see the roadmap).
 
 ## Project structure
 
@@ -506,7 +503,7 @@ More detail, in Vietnamese: [`backend/README.md`](backend/README.md), [`mobile/R
 
 Short and realistic, in the order I would do it:
 
-1. Run pgTAP and the HTTP acceptance suite in CI (Supabase CLI in Actions) so the database layer is checked on every push.
+1. Add CI: the unit suites above need no Docker, and pgTAP plus the HTTP acceptance suite can run with the Supabase CLI.
 2. Build and test on iOS, or drop the iOS config until then.
 3. Translate the component READMEs and the Makefile messages to English, and add an i18n layer to the shell UI.
 4. A real deployment (Supabase Cloud + PowerSync Cloud) with the health endpoint monitored, and a short write-up of
